@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "234639596176",
+    "project_id": "homeelectricaltracking",
+    "storage_bucket": "homeelectricaltracking.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234639596176:android:c39cdb7994615a32ae1615",
+        "android_client_info": {
+          "package_name": "com.hetrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2dEu5ty70pH6ycW00TF6oPf6CUEoKBBw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
