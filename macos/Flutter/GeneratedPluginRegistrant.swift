@@ -5,8 +5,12 @@
 import FlutterMacOS
 import Foundation
 
-import local_auth_darwin
+import firebase_core
+import firebase_database
+import flutter_local_notifications
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  LocalAuthPlugin.register(with: registry.registrar(forPlugin: "LocalAuthPlugin"))
+  FLTFirebaseCorePlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseCorePlugin"))
+  FLTFirebaseDatabasePlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseDatabasePlugin"))
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
 }

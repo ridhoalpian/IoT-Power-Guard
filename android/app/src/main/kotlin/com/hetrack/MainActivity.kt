@@ -1,4 +1,4 @@
-package com.example.iot_power_guard
+package com.hetrack
 
 import io.flutter.embedding.android.FlutterActivity
 
