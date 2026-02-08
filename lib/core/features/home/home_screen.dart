@@ -194,11 +194,6 @@ class HomeOverview extends StatelessWidget {
                       icon: Icons.wifi_tethering,
                     ),
                     StatCard(
-                      title: 'Anomali daya',
-                      value: '0',
-                      icon: Icons.warning_amber_rounded,
-                    ),
-                    StatCard(
                       title: 'Batas daya',
                       value: 'On',
                       icon: Icons.shield_outlined,
