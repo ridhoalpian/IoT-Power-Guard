@@ -1,4 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/electrical_data.dart';
 
@@ -7,7 +10,34 @@ class FirebaseService {
 
   static final FirebaseService instance = FirebaseService._();
 
-  final DatabaseReference _root = FirebaseDatabase.instance.ref('iot_power_guard');
+  static const String _databaseUrl =
+      'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
+  static const String _relayRootPath = 'relay';
+  static const String _iotRootPath = 'iot_power_guard';
+  static const String _userEmail = 'ridhoalpian8713@gmail.com';
+  static const String _userPassword = 'ridho8733';
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  late final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: _databaseUrl,
+  );
+  late final DatabaseReference _root = _database.ref(_iotRootPath);
+  late final DatabaseReference _relayRoot = _database.ref(_relayRootPath);
+
+  Future<void> initialize() async {
+    if (_auth.currentUser != null) {
+      return;
+    }
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: _userEmail,
+        password: _userPassword,
+      );
+    } on FirebaseAuthException catch (error) {
+      debugPrint('Firebase auth failed: ${error.code}');
+    }
+  }
 
   Stream<ElectricalData> get electricalDataStream {
     return _root.child('sensors').onValue.map((event) {
@@ -27,14 +57,23 @@ class FirebaseService {
   }
 
   Stream<Map<int, bool>> get relayStateStream {
-    return _root.child('relays').onValue.map((event) {
+    return _relayRoot.onValue.map((event) {
       final map = _asMap(event.snapshot.value);
-      return {
-        1: _toBool(map['relay1']),
-        2: _toBool(map['relay2']),
-        3: _toBool(map['relay3']),
-        4: _toBool(map['relay4']),
-      };
+      final result = <int, bool>{};
+      for (final entry in map.entries) {
+        final key = entry.key.toLowerCase();
+        if (!key.startsWith('relay')) {
+          continue;
+        }
+        final relayNumber = int.tryParse(key.replaceFirst('relay', ''));
+        if (relayNumber == null) {
+          continue;
+        }
+        result[relayNumber] = _toBool(entry.value);
+      }
+      result.putIfAbsent(1, () => false);
+      result.putIfAbsent(2, () => false);
+      return result;
     });
   }
 
@@ -62,7 +101,7 @@ class FirebaseService {
   }
 
   Future<void> setRelay(int relayNumber, bool isOn) {
-    return _root.child('relays').child('relay$relayNumber').set(isOn);
+    return _relayRoot.child('relay$relayNumber').set(isOn);
   }
 
   static Map<String, dynamic> _asMap(dynamic value) {

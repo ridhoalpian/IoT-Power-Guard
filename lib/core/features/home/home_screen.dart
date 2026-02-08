@@ -76,12 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
           StreamBuilder<Map<int, bool>>(
             stream: _firebaseService.relayStateStream,
             builder: (context, snapshot) {
-              final relayState = snapshot.data ?? {
-                1: false,
-                2: false,
-                3: false,
-                4: false,
-              };
+              final relayState = snapshot.data ?? {1: false, 2: false};
               return _RelayControlCard(
                 relayState: relayState,
                 onChanged: (relay, value) {
@@ -341,6 +336,7 @@ class _RelayControlCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final relays = relayState.keys.toList()..sort();
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -356,29 +352,14 @@ class _RelayControlCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _RelayTile(
-            title: 'Relay 1',
-            value: relayState[1] ?? false,
-            onChanged: (value) => onChanged(1, value),
-          ),
-          const Divider(height: 1),
-          _RelayTile(
-            title: 'Relay 2',
-            value: relayState[2] ?? false,
-            onChanged: (value) => onChanged(2, value),
-          ),
-          const Divider(height: 1),
-          _RelayTile(
-            title: 'Relay 3',
-            value: relayState[3] ?? false,
-            onChanged: (value) => onChanged(3, value),
-          ),
-          const Divider(height: 1),
-          _RelayTile(
-            title: 'Relay 4',
-            value: relayState[4] ?? false,
-            onChanged: (value) => onChanged(4, value),
-          ),
+          for (var index = 0; index < relays.length; index++) ...[
+            _RelayTile(
+              title: 'Relay ${relays[index]}',
+              value: relayState[relays[index]] ?? false,
+              onChanged: (value) => onChanged(relays[index], value),
+            ),
+            if (index != relays.length - 1) const Divider(height: 1),
+          ],
         ],
       ),
     );
