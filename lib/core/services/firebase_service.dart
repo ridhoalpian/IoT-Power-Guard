@@ -15,6 +15,9 @@ class FirebaseService {
   static const String _relayRootPath = 'relay';
   static const String _iotRootPath = 'iot_power_guard';
   static const int _defaultRelayCount = 9;
+  static const int _deviceOfflineThresholdMs = 5000;
+  static const int _epochMsThreshold = 1000000000000;
+  static const int _epochSecondsThreshold = 1000000000;
   static const String _userEmail = 'ridhoalpian8713@gmail.com';
   static const String _userPassword = 'ridho8733';
 
@@ -25,6 +28,10 @@ class FirebaseService {
   );
   late final DatabaseReference _root = _database.ref(_iotRootPath);
   late final DatabaseReference _relayRoot = _database.ref(_relayRootPath);
+  late final DatabaseReference _deviceRoot = _database.ref('device');
+  int? _deviceBootEpochMs;
+  int? _lastUptimeMs;
+  DateTime? _cachedLastSeen;
 
   Future<void> initialize() async {
     if (_auth.currentUser != null) {
@@ -90,26 +97,36 @@ class FirebaseService {
 
   Stream<DateTime?> get lastSeenStream {
     return _root.child('device').child('last_seen').onValue.map((event) {
-      final value = event.snapshot.value;
-      if (value == null) {
-        return null;
-      }
-      if (value is int) {
-        return DateTime.fromMillisecondsSinceEpoch(value);
-      }
-      if (value is double) {
-        return DateTime.fromMillisecondsSinceEpoch(value.toInt());
-      }
-      if (value is String) {
-        final parsed = int.tryParse(value);
-        if (parsed != null) {
-          return DateTime.fromMillisecondsSinceEpoch(parsed);
-        }
-        return DateTime.tryParse(value);
-      }
-      return null;
+      return _parseDateTime(event.snapshot.value);
     });
   }
+
+  Stream<DateTime?> get deviceLastSeenStream {
+    return _deviceRoot.child('last_seen').onValue.map((event) {
+      final parsed = _parseDateTime(event.snapshot.value);
+      _cachedLastSeen = parsed;
+      return parsed;
+    });
+  }
+
+  Stream<bool> get deviceOnlineByLastSeenStream async* {
+  // listen firebase sekali
+  deviceLastSeenStream.listen((_) {});
+
+  while (true) {
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (_cachedLastSeen == null) {
+      yield false;
+      continue;
+    }
+
+    final now = DateTime.now();
+    final diff = now.difference(_cachedLastSeen!).inMilliseconds;
+
+    yield diff < _deviceOfflineThresholdMs;
+  }
+}
 
   Future<void> setRelay(int relayNumber, bool isOn) {
     return _relayRoot.child('relay$relayNumber').set(isOn);
@@ -133,5 +150,43 @@ class FirebaseService {
       return value.toLowerCase() == 'true' || value == '1' || value.toLowerCase() == 'on';
     }
     return false;
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    int? numeric;
+    if (value is int) {
+      numeric = value;
+    } else if (value is double) {
+      numeric = value.toInt();
+    } else if (value is String) {
+      numeric = int.tryParse(value);
+      if (numeric == null) {
+        return DateTime.tryParse(value);
+      }
+    }
+
+    if (numeric == null) {
+      return null;
+    }
+
+    if (numeric >= _epochMsThreshold) {
+      return DateTime.fromMillisecondsSinceEpoch(numeric);
+    }
+
+    if (numeric >= _epochSecondsThreshold) {
+      return DateTime.fromMillisecondsSinceEpoch(numeric * 1000);
+    }
+
+    if (_deviceBootEpochMs == null ||
+        _lastUptimeMs == null ||
+        numeric < _lastUptimeMs!) {
+      _deviceBootEpochMs = DateTime.now().millisecondsSinceEpoch - numeric;
+    }
+    _lastUptimeMs = numeric;
+    final bootEpochMs = _deviceBootEpochMs ?? DateTime.now().millisecondsSinceEpoch;
+    return DateTime.fromMillisecondsSinceEpoch(bootEpochMs + numeric);
   }
 }

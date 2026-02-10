@@ -43,17 +43,20 @@ class DashboardPage extends StatelessWidget {
         const SizedBox(height: 24),
         const SectionTitle(title: 'Status Koneksi ESP32'),
         const SizedBox(height: 12),
-        StreamBuilder<DateTime?>(
-          stream: firebaseService.lastSeenStream,
-          builder: (context, snapshot) {
-            final lastSeen = snapshot.data;
-            final now = DateTime.now();
-            final isOnline = lastSeen != null &&
-                now.difference(lastSeen).inSeconds <= onlineThresholdSeconds;
-            return ConnectionStatusCard(
-              isOnline: isOnline,
-              lastSeen: lastSeen,
-              thresholdSeconds: onlineThresholdSeconds,
+        StreamBuilder<bool>(
+          stream: firebaseService.deviceOnlineByLastSeenStream,
+          builder: (context, onlineSnapshot) {
+            return StreamBuilder<DateTime?>(
+              stream: firebaseService.deviceLastSeenStream,
+              builder: (context, snapshot) {
+                final lastSeen = snapshot.data;
+                final isOnline = onlineSnapshot.data ?? false;
+                return ConnectionStatusCard(
+                  isOnline: isOnline,
+                  lastSeen: lastSeen,
+                  thresholdSeconds: onlineThresholdSeconds,
+                );
+              },
             );
           },
         ),

@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const int _onlineThresholdSeconds = 30;
+  static const int _onlineThresholdSeconds = 5;
 
   final FirebaseService _firebaseService = FirebaseService.instance;
   StreamSubscription<String>? _statusSubscription;
