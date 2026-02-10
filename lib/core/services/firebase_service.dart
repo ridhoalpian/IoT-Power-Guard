@@ -14,6 +14,7 @@ class FirebaseService {
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
   static const String _relayRootPath = 'relay';
   static const String _iotRootPath = 'iot_power_guard';
+  static const int _defaultRelayCount = 9;
   static const String _userEmail = 'ridhoalpian8713@gmail.com';
   static const String _userPassword = 'ridho8733';
 
@@ -46,6 +47,15 @@ class FirebaseService {
     });
   }
 
+  Stream<ElectricalData> roomDataStream(String roomKey) {
+    return _root.child('rooms').child(roomKey).onValue.map((event) {
+      final map = _asMap(event.snapshot.value);
+      final sensorsMap =
+          map.containsKey('sensors') ? _asMap(map['sensors']) : map;
+      return ElectricalData.fromMap(sensorsMap);
+    });
+  }
+
   Stream<String> get classificationStream {
     return _root.child('knn').child('classification').onValue.map((event) {
       final value = event.snapshot.value;
@@ -71,8 +81,9 @@ class FirebaseService {
         }
         result[relayNumber] = _toBool(entry.value);
       }
-      result.putIfAbsent(1, () => false);
-      result.putIfAbsent(2, () => false);
+      for (var index = 1; index <= _defaultRelayCount; index++) {
+        result.putIfAbsent(index, () => false);
+      }
       return result;
     });
   }
