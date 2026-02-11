@@ -41,4 +41,22 @@ class NotificationService {
       details,
     );
   }
+
+  Future<void> showWaspadaAlert() async {
+    const androidDetails = AndroidNotificationDetails(
+      'waspada_channel',
+      'Peringatan Konsumsi',
+      channelDescription: 'Notifikasi saat status Waspada terdeteksi',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: androidDetails);
+
+    await _plugin.show(
+      2,
+      'Peringatan Konsumsi',
+      'Status KNN menunjukkan WASPADA. Pantau konsumsi listrik Anda.',
+      details,
+    );
+  }
 }

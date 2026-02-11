@@ -47,9 +47,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleStatusUpdate(String status) {
     final normalized = status.trim();
-    if (_lastStatus != normalized && normalized.toLowerCase() == 'boros') {
-      NotificationService.instance.showBorosAlert();
+    if (_lastStatus == normalized) {
+      return;
     }
+
+    final lower = normalized.toLowerCase();
+    if (lower == 'boros') {
+      NotificationService.instance.showBorosAlert();
+    } else if (lower == 'waspada') {
+      NotificationService.instance.showWaspadaAlert();
+    }
+
     _lastStatus = normalized;
   }
 
