@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int _onlineThresholdSeconds = 5;
 
   final FirebaseService _firebaseService = FirebaseService.instance;
+  late final PageController _pageController;
   StreamSubscription<String>? _statusSubscription;
   String? _lastStatus;
   int _currentIndex = 0;
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
     _statusSubscription =
         _firebaseService.classificationStream.listen(_handleStatusUpdate);
   }
@@ -64,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _statusSubscription?.cancel();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -87,13 +90,23 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
       ),
-      body: IndexedStack(
-        index: _currentIndex,
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
         children: pages,
       ),
       bottomNavigationBar: CustomBottomNav(
         currentIndex: _currentIndex,
         onTap: (index) {
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          );
           setState(() {
             _currentIndex = index;
           });
