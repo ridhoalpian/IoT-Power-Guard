@@ -4,11 +4,11 @@ import '../../../services/firebase_service.dart';
 import '../widgets/home_widgets.dart';
 
 class RelayControlPage extends StatelessWidget {
-  RelayControlPage({super.key, required this.firebaseService});
+  const RelayControlPage({super.key, required this.firebaseService});
 
   final FirebaseService firebaseService;
 
-  final List<_RoomRelayConfig> rooms = const [
+  final List<_RoomRelayConfig> _rooms = const [
     _RoomRelayConfig(
       name: 'Dapur',
       icon: Icons.kitchen_outlined,
@@ -51,7 +51,7 @@ class RelayControlPage extends StatelessWidget {
             final relayState = snapshot.data ?? <int, bool>{};
             return Column(
               children: [
-                for (final room in rooms) ...[
+                for (final room in _rooms) ...[
                   _RoomRelayCard(
                     room: room,
                     relayState: relayState,

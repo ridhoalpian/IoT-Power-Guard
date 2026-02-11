@@ -5,11 +5,11 @@ import '../../../services/firebase_service.dart';
 import '../widgets/home_widgets.dart';
 
 class RoomMonitoringPage extends StatelessWidget {
-  RoomMonitoringPage({super.key, required this.firebaseService});
+  const RoomMonitoringPage({super.key, required this.firebaseService});
 
   final FirebaseService firebaseService;
 
-  final List<_RoomInfo> rooms = const [
+  final List<_RoomInfo> _rooms = const [
     _RoomInfo(id: 'dapur', name: 'Dapur', icon: Icons.kitchen_outlined),
     _RoomInfo(id: 'kamar_tidur', name: 'Kamar Tidur', icon: Icons.bed_outlined),
     _RoomInfo(id: 'ruang_depan', name: 'Ruang Depan', icon: Icons.chair_outlined),
@@ -22,7 +22,7 @@ class RoomMonitoringPage extends StatelessWidget {
       children: [
         const SectionTitle(title: 'Monitoring Konsumsi Tiap Ruangan'),
         const SizedBox(height: 12),
-        for (final room in rooms) ...[
+        for (final room in _rooms) ...[
           _RoomMetricsCard(
             room: room,
             stream: firebaseService.roomDataStream(room.id),

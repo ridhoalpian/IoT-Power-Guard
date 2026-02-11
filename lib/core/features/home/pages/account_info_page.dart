@@ -52,7 +52,7 @@ class AccountInfoPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Pengguna IoT Power Guard',
+                      'Ridho Alpian',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
