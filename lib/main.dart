@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'core/features/home/home_screen.dart';
+import 'core/features/splash/splash_screen.dart';
 import 'core/services/firebase_service.dart';
 import 'core/services/notification_service.dart';
 
@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
