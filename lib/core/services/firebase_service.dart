@@ -12,14 +12,14 @@ class FirebaseService {
 
   static const String _databaseUrl =
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
-  static const String _relayRootPath = 'relay';
   static const String _iotRootPath = 'iot_power_guard';
-  static const int _defaultRelayCount = 9;
+  static const int _defaultRelayCount = 3;
   static const int _deviceOfflineThresholdMs = 5000;
   static const int _epochMsThreshold = 1000000000000;
   static const int _epochSecondsThreshold = 1000000000;
   static const String _userEmail = 'ridhoalpian8713@gmail.com';
   static const String _userPassword = 'ridho8733';
+  static const String _defaultDeviceId = '6800';
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -27,8 +27,9 @@ class FirebaseService {
     databaseURL: _databaseUrl,
   );
   late final DatabaseReference _root = _database.ref(_iotRootPath);
-  late final DatabaseReference _relayRoot = _database.ref(_relayRootPath);
   late final DatabaseReference _deviceRoot = _database.ref('device');
+  late final DatabaseReference _defaultDeviceRoot =
+      _deviceRoot.child(_defaultDeviceId);
   int? _deviceBootEpochMs;
   int? _lastUptimeMs;
   DateTime? _cachedLastSeen;
@@ -73,8 +74,20 @@ class FirebaseService {
     }).distinct();
   }
 
-  Stream<Map<int, bool>> get relayStateStream {
-    return _relayRoot.onValue.map((event) {
+  Stream<List<String>> get deviceIdListStream {
+    return _deviceRoot.onValue.map((event) {
+      final map = _asMap(event.snapshot.value);
+      final deviceIds = map.entries
+          .where((entry) => entry.value is Map)
+          .map((entry) => entry.key)
+          .toList();
+      deviceIds.sort();
+      return deviceIds;
+    });
+  }
+
+  Stream<Map<int, bool>> relayStateStream(String deviceId) {
+    return _deviceRoot.child(deviceId).onValue.map((event) {
       final map = _asMap(event.snapshot.value);
       final result = <int, bool>{};
       for (final entry in map.entries) {
@@ -102,7 +115,7 @@ class FirebaseService {
   }
 
   Stream<DateTime?> get deviceLastSeenStream {
-    return _deviceRoot.child('last_seen').onValue.map((event) {
+    return _defaultDeviceRoot.child('last_seen').onValue.map((event) {
       final parsed = _parseDateTime(event.snapshot.value);
       _cachedLastSeen = parsed;
       return parsed;
@@ -128,8 +141,8 @@ class FirebaseService {
   }
 }
 
-  Future<void> setRelay(int relayNumber, bool isOn) {
-    return _relayRoot.child('relay$relayNumber').set(isOn);
+  Future<void> setRelay(int relayNumber, bool isOn, String deviceId) {
+    return _deviceRoot.child(deviceId).child('relay$relayNumber').set(isOn);
   }
 
   static Map<String, dynamic> _asMap(dynamic value) {

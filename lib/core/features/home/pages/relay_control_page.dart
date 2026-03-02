@@ -3,37 +3,26 @@ import 'package:flutter/material.dart';
 import '../../../services/firebase_service.dart';
 import '../widgets/home_widgets.dart';
 
-class RelayControlPage extends StatelessWidget {
+class RelayControlPage extends StatefulWidget {
   const RelayControlPage({super.key, required this.firebaseService});
 
   final FirebaseService firebaseService;
 
+  @override
+  State<RelayControlPage> createState() => _RelayControlPageState();
+}
+
+class _RelayControlPageState extends State<RelayControlPage> {
+  String? _selectedDeviceId;
+
   final List<_RoomRelayConfig> _rooms = const [
     _RoomRelayConfig(
-      name: 'Dapur',
-      icon: Icons.kitchen_outlined,
+      name: 'Kontrol Utama',
+      icon: Icons.power_outlined,
       devices: [
         _RelayDevice(relayNumber: 1, name: 'Perangkat 1'),
         _RelayDevice(relayNumber: 2, name: 'Perangkat 2'),
         _RelayDevice(relayNumber: 3, name: 'Perangkat 3'),
-      ],
-    ),
-    _RoomRelayConfig(
-      name: 'Kamar Tidur',
-      icon: Icons.bed_outlined,
-      devices: [
-        _RelayDevice(relayNumber: 4, name: 'Perangkat 1'),
-        _RelayDevice(relayNumber: 5, name: 'Perangkat 2'),
-        _RelayDevice(relayNumber: 6, name: 'Perangkat 3'),
-      ],
-    ),
-    _RoomRelayConfig(
-      name: 'Ruang Depan',
-      icon: Icons.chair_outlined,
-      devices: [
-        _RelayDevice(relayNumber: 7, name: 'Perangkat 1'),
-        _RelayDevice(relayNumber: 8, name: 'Perangkat 2'),
-        _RelayDevice(relayNumber: 9, name: 'Perangkat 3'),
       ],
     ),
   ];
@@ -45,22 +34,110 @@ class RelayControlPage extends StatelessWidget {
       children: [
         const SectionTitle(title: 'Kontrol Perangkat Listrik Per Ruangan'),
         const SizedBox(height: 12),
-        StreamBuilder<Map<int, bool>>(
-          stream: firebaseService.relayStateStream,
+        StreamBuilder<List<String>>(
+          stream: widget.firebaseService.deviceIdListStream,
           builder: (context, snapshot) {
-            final relayState = snapshot.data ?? <int, bool>{};
+            final deviceIds = snapshot.data ?? const <String>[];
+
+            if (deviceIds.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Belum ada device terdaftar di /device.',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              );
+            }
+
+            if (_selectedDeviceId == null ||
+                !deviceIds.contains(_selectedDeviceId)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) {
+                  return;
+                }
+                setState(() {
+                  _selectedDeviceId = deviceIds.first;
+                });
+              });
+            }
+
+            final selectedId = _selectedDeviceId ?? deviceIds.first;
+
             return Column(
               children: [
-                for (final room in _rooms) ...[
-                  _RoomRelayCard(
-                    room: room,
-                    relayState: relayState,
-                    onChanged: (relay, value) {
-                      firebaseService.setRelay(relay, value);
-                    },
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                ],
+                  child: DropdownButtonFormField<String>(
+                    value: selectedId,
+                    isExpanded: true,
+                    items: deviceIds
+                        .map(
+                          (deviceId) => DropdownMenuItem(
+                            value: deviceId,
+                            child: Text(deviceId),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedDeviceId = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Pilih Device',
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                StreamBuilder<Map<int, bool>>(
+                  stream:
+                      widget.firebaseService.relayStateStream(selectedId),
+                  builder: (context, snapshot) {
+                    final relayState = snapshot.data ?? <int, bool>{};
+                    return Column(
+                      children: [
+                        for (final room in _rooms) ...[
+                          _RoomRelayCard(
+                            room: room,
+                            relayState: relayState,
+                            onChanged: (relay, value) {
+                              widget.firebaseService
+                                  .setRelay(relay, value, selectedId);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ],
             );
           },
