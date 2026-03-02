@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/device_profile.dart';
 import '../models/electrical_data.dart';
 
 class FirebaseService {
@@ -55,12 +56,34 @@ class FirebaseService {
     });
   }
 
-  Stream<ElectricalData> roomDataStream(String roomKey) {
-    return _root.child('rooms').child(roomKey).onValue.map((event) {
+  Stream<ElectricalData> deviceMonitoringStream(String deviceId) {
+    return _deviceRoot
+        .child(deviceId)
+        .child('monitoring')
+        .onValue
+        .map((event) {
       final map = _asMap(event.snapshot.value);
-      final sensorsMap =
-          map.containsKey('sensors') ? _asMap(map['sensors']) : map;
-      return ElectricalData.fromMap(sensorsMap);
+      return ElectricalData.fromMap(map);
+    });
+  }
+
+  Stream<DeviceProfile> deviceProfileStream(
+    String deviceId, {
+    required String fallbackName,
+    required String fallbackIconKey,
+  }) {
+    return _deviceRoot.child(deviceId).child('profile').onValue.map((event) {
+      final map = _asMap(event.snapshot.value);
+      final nameValue = map['name']?.toString().trim();
+      final iconValue = map['icon']?.toString().trim();
+      return DeviceProfile(
+        name: (nameValue == null || nameValue.isEmpty)
+            ? fallbackName
+            : nameValue,
+        iconKey: (iconValue == null || iconValue.isEmpty)
+            ? fallbackIconKey
+            : iconValue,
+      );
     });
   }
 
@@ -87,7 +110,12 @@ class FirebaseService {
   }
 
   Stream<Map<int, bool>> relayStateStream(String deviceId) {
-    return _deviceRoot.child(deviceId).onValue.map((event) {
+    final query = _deviceRoot
+        .child(deviceId)
+        .orderByKey()
+        .startAt('relay')
+        .endAt('relay\uf8ff');
+    return query.onValue.map((event) {
       final map = _asMap(event.snapshot.value);
       final result = <int, bool>{};
       for (final entry in map.entries) {
@@ -140,6 +168,24 @@ class FirebaseService {
     yield diff < _deviceOfflineThresholdMs;
   }
 }
+
+  Future<void> setDeviceProfile(
+    String deviceId, {
+    String? name,
+    String? iconKey,
+  }) {
+    final updates = <String, dynamic>{};
+    if (name != null) {
+      updates['name'] = name;
+    }
+    if (iconKey != null) {
+      updates['icon'] = iconKey;
+    }
+    if (updates.isEmpty) {
+      return Future.value();
+    }
+    return _deviceRoot.child(deviceId).child('profile').update(updates);
+  }
 
   Future<void> setRelay(int relayNumber, bool isOn, String deviceId) {
     return _deviceRoot.child(deviceId).child('relay$relayNumber').set(isOn);

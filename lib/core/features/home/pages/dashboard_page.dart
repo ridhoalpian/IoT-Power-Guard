@@ -19,7 +19,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with AutomaticKeepAliveClientMixin<DashboardPage> {
   static const List<String> _statusOptions = ['Normal', 'Waspada', 'Boros'];
 
   bool _testMode = true;
@@ -73,6 +74,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
@@ -139,6 +141,9 @@ class _DashboardPageState extends State<DashboardPage> {
       ],
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _TestStatusPanel extends StatelessWidget {
