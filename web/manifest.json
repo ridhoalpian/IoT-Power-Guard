@@ -1,6 +1,6 @@
 {
-    "name": "iot_power_guard",
-    "short_name": "iot_power_guard",
+    "name": "HETrack",
+    "short_name": "HETrack",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

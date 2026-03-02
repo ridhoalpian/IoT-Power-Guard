@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'IoT Power Guard',
+      title: 'HETrack',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: colorScheme,

@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'IoT Power Guard',
+                'HETrack',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
