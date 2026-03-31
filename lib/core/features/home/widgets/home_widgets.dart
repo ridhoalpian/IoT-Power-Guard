@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/device_connection_summary.dart';
 import '../../../models/electrical_data.dart';
 
 class SectionTitle extends StatelessWidget {
@@ -93,15 +94,16 @@ class MetricCard extends StatelessWidget {
         color: elevated ? Colors.white : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(16),
         border: elevated ? null : Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: elevated
-            ? const [
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 6),
-                ),
-              ]
-            : null,
+        boxShadow:
+            elevated
+                ? const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 6),
+                  ),
+                ]
+                : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,10 +112,7 @@ class MetricCard extends StatelessWidget {
           Icon(icon, color: const Color(0xFF0A7A6F)),
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -128,10 +127,7 @@ class MetricCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 unit,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ],
           ),
@@ -191,10 +187,7 @@ class KnnStatusCard extends StatelessWidget {
               children: [
                 const Text(
                   'Klasifikasi Konsumsi',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -232,20 +225,37 @@ class KnnStatusCard extends StatelessWidget {
 class ConnectionStatusCard extends StatelessWidget {
   const ConnectionStatusCard({
     super.key,
-    required this.isOnline,
-    required this.lastSeen,
+    required this.summary,
     required this.thresholdSeconds,
   });
 
-  final bool isOnline;
-  final DateTime? lastSeen;
+  final DeviceConnectionSummary summary;
   final int thresholdSeconds;
 
   @override
   Widget build(BuildContext context) {
-    final statusText = isOnline ? 'Online' : 'Offline';
+    final activeDevicesText =
+        summary.onlineDeviceNames.isEmpty
+            ? 'Tidak ada perangkat aktif.'
+            : summary.onlineDeviceNames.join(', ');
+    final offlineDevicesText =
+        summary.offlineDeviceNames.isEmpty
+            ? 'Tidak ada perangkat offline.'
+            : summary.offlineDeviceNames.join(', ');
+    final statusText =
+        !summary.hasDevices
+            ? 'Belum Ada Device'
+            : summary.allOnline
+            ? 'Semua Online'
+            : summary.allOffline
+            ? 'Semua Offline'
+            : '${summary.onlineDevices} Online';
     final color =
-        isOnline ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+        !summary.hasDevices
+            ? const Color(0xFF6B7280)
+            : summary.allOffline
+            ? const Color(0xFFDC2626)
+            : const Color(0xFF16A34A);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -273,7 +283,9 @@ class ConnectionStatusCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isOnline ? Icons.wifi : Icons.wifi_off,
+                  summary.hasDevices && !summary.allOffline
+                      ? Icons.wifi
+                      : Icons.wifi_off,
                   color: color,
                 ),
               ),
@@ -283,10 +295,7 @@ class ConnectionStatusCard extends StatelessWidget {
                 children: [
                   const Text(
                     'Status Perangkat',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF6B7280),
-                    ),
+                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -303,21 +312,38 @@ class ConnectionStatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            lastSeen == null
+            !summary.hasDevices
+                ? 'Belum ada perangkat terdaftar di Firebase.'
+                : summary.latestLastSeen == null
                 ? 'Belum ada pembaruan dari perangkat.'
-                : 'Terakhir update: ${formatDateTime(lastSeen!)}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+                : 'Terakhir update: ${formatDateTime(summary.latestLastSeen!)}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 6),
           Text(
-            'Perangkat dianggap online jika update < $thresholdSeconds detik.',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
+            summary.hasDevices
+                ? 'Online: ${summary.onlineDevices} perangkat | Offline: ${summary.offlineDevices} perangkat.'
+                : 'Menunggu data perangkat.',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+          if (summary.hasDevices) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Aktif: $activeDevicesText',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             ),
+            if (summary.offlineDeviceNames.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Offline: $offlineDevicesText',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+            ],
+          ],
+          const SizedBox(height: 6),
+          Text(
+            'Perangkat dianggap online jika update < $thresholdSeconds detik.',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
         ],
       ),

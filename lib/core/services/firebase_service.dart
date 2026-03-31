@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/device_connection_summary.dart';
 import '../models/device_profile.dart';
 import '../models/electrical_data.dart';
 
@@ -18,9 +21,10 @@ class FirebaseService {
   static const int _deviceOfflineThresholdMs = 5000;
   static const int _epochMsThreshold = 1000000000000;
   static const int _epochSecondsThreshold = 1000000000;
+  static const int _uint32Mod = 4294967296;
+  static const int _maxReasonableLastSeenDriftMs = 31536000000;
   static const String _userEmail = 'ridhoalpian8713@gmail.com';
   static const String _userPassword = 'ridho8733';
-  static const String _defaultDeviceId = '6800';
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -29,11 +33,6 @@ class FirebaseService {
   );
   late final DatabaseReference _root = _database.ref(_iotRootPath);
   late final DatabaseReference _deviceRoot = _database.ref('device');
-  late final DatabaseReference _defaultDeviceRoot =
-      _deviceRoot.child(_defaultDeviceId);
-  int? _deviceBootEpochMs;
-  int? _lastUptimeMs;
-  DateTime? _cachedLastSeen;
 
   Future<void> initialize() async {
     if (_auth.currentUser != null) {
@@ -50,18 +49,20 @@ class FirebaseService {
   }
 
   Stream<ElectricalData> get electricalDataStream {
-    return _root.child('sensors').onValue.map((event) {
+    return _deviceRoot.onValue.map((event) {
       final map = _asMap(event.snapshot.value);
-      return ElectricalData.fromMap(map);
+      var total = ElectricalData.empty();
+      for (final value in map.values) {
+        final deviceMap = _asMap(value);
+        final monitoringMap = _asMap(deviceMap['monitoring']);
+        total += ElectricalData.fromMap(monitoringMap);
+      }
+      return total;
     });
   }
 
   Stream<ElectricalData> deviceMonitoringStream(String deviceId) {
-    return _deviceRoot
-        .child(deviceId)
-        .child('monitoring')
-        .onValue
-        .map((event) {
+    return _deviceRoot.child(deviceId).child('monitoring').onValue.map((event) {
       final map = _asMap(event.snapshot.value);
       return ElectricalData.fromMap(map);
     });
@@ -77,12 +78,12 @@ class FirebaseService {
       final nameValue = map['name']?.toString().trim();
       final iconValue = map['icon']?.toString().trim();
       return DeviceProfile(
-        name: (nameValue == null || nameValue.isEmpty)
-            ? fallbackName
-            : nameValue,
-        iconKey: (iconValue == null || iconValue.isEmpty)
-            ? fallbackIconKey
-            : iconValue,
+        name:
+            (nameValue == null || nameValue.isEmpty) ? fallbackName : nameValue,
+        iconKey:
+            (iconValue == null || iconValue.isEmpty)
+                ? fallbackIconKey
+                : iconValue,
       );
     });
   }
@@ -100,10 +101,11 @@ class FirebaseService {
   Stream<List<String>> get deviceIdListStream {
     return _deviceRoot.onValue.map((event) {
       final map = _asMap(event.snapshot.value);
-      final deviceIds = map.entries
-          .where((entry) => entry.value is Map)
-          .map((entry) => entry.key)
-          .toList();
+      final deviceIds =
+          map.entries
+              .where((entry) => entry.value is Map)
+              .map((entry) => entry.key)
+              .toList();
       deviceIds.sort();
       return deviceIds;
     });
@@ -136,38 +138,48 @@ class FirebaseService {
     });
   }
 
-  Stream<DateTime?> get lastSeenStream {
-    return _root.child('device').child('last_seen').onValue.map((event) {
-      return _parseDateTime(event.snapshot.value);
-    });
-  }
+  Stream<DeviceConnectionSummary> deviceConnectionSummaryStream({
+    Duration? offlineThreshold,
+  }) {
+    final threshold =
+        offlineThreshold ??
+        const Duration(milliseconds: _deviceOfflineThresholdMs);
+    late final StreamController<DeviceConnectionSummary> controller;
+    StreamSubscription<Map<String, dynamic>>? subscription;
+    Timer? timer;
+    Map<String, dynamic> latestDeviceState = const {};
 
-  Stream<DateTime?> get deviceLastSeenStream {
-    return _defaultDeviceRoot.child('last_seen').onValue.map((event) {
-      final parsed = _parseDateTime(event.snapshot.value);
-      _cachedLastSeen = parsed;
-      return parsed;
-    });
-  }
-
-  Stream<bool> get deviceOnlineByLastSeenStream async* {
-  // listen firebase sekali
-  deviceLastSeenStream.listen((_) {});
-
-  while (true) {
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (_cachedLastSeen == null) {
-      yield false;
-      continue;
+    void emitSummary() {
+      if (controller.isClosed) {
+        return;
+      }
+      controller.add(
+        _buildConnectionSummary(latestDeviceState, offlineThreshold: threshold),
+      );
     }
 
-    final now = DateTime.now();
-    final diff = now.difference(_cachedLastSeen!).inMilliseconds;
+    controller = StreamController<DeviceConnectionSummary>.broadcast(
+      onListen: () {
+        subscription = _deviceRoot.onValue
+            .map((event) {
+              return _asMap(event.snapshot.value);
+            })
+            .listen((value) {
+              latestDeviceState = value;
+              emitSummary();
+            }, onError: controller.addError);
+        timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          emitSummary();
+        });
+      },
+      onCancel: () async {
+        await subscription?.cancel();
+        timer?.cancel();
+      },
+    );
 
-    yield diff < _deviceOfflineThresholdMs;
+    return controller.stream;
   }
-}
 
   Future<void> setDeviceProfile(
     String deviceId, {
@@ -206,15 +218,79 @@ class FirebaseService {
       return value != 0;
     }
     if (value is String) {
-      return value.toLowerCase() == 'true' || value == '1' || value.toLowerCase() == 'on';
+      return value.toLowerCase() == 'true' ||
+          value == '1' ||
+          value.toLowerCase() == 'on';
     }
     return false;
   }
 
-  DateTime? _parseDateTime(dynamic value) {
-    if (value == null) {
-      return null;
+  DeviceConnectionSummary _buildConnectionSummary(
+    Map<String, dynamic> deviceStateById, {
+    required Duration offlineThreshold,
+  }) {
+    if (deviceStateById.isEmpty) {
+      return DeviceConnectionSummary.empty();
     }
+
+    final now = DateTime.now();
+    var onlineDevices = 0;
+    DateTime? latestLastSeen;
+    final onlineDeviceNames = <String>[];
+    final offlineDeviceNames = <String>[];
+
+    for (final entry in deviceStateById.entries) {
+      final deviceId = entry.key;
+      final deviceMap = _asMap(entry.value);
+      final profileMap = _asMap(deviceMap['profile']);
+      final monitoringMap = _asMap(deviceMap['monitoring']);
+      final deviceName = _resolveDeviceName(profileMap, deviceId);
+      final monitoringTimestamp = _parseDateTime(monitoringMap['timestamp']);
+      final lastSeen = _parseLastSeen(
+        deviceMap['last_seen'],
+        referenceTime: monitoringTimestamp ?? now,
+      );
+
+      if (lastSeen != null &&
+          now.difference(lastSeen).inMilliseconds <=
+              offlineThreshold.inMilliseconds) {
+        onlineDevices++;
+        onlineDeviceNames.add(deviceName);
+      } else {
+        offlineDeviceNames.add(deviceName);
+      }
+      if (lastSeen != null &&
+          (latestLastSeen == null || lastSeen.isAfter(latestLastSeen))) {
+        latestLastSeen = lastSeen;
+      }
+    }
+
+    onlineDeviceNames.sort();
+    offlineDeviceNames.sort();
+
+    final totalDevices = deviceStateById.length;
+    return DeviceConnectionSummary(
+      totalDevices: totalDevices,
+      onlineDevices: onlineDevices,
+      offlineDevices: totalDevices - onlineDevices,
+      latestLastSeen: latestLastSeen,
+      onlineDeviceNames: onlineDeviceNames,
+      offlineDeviceNames: offlineDeviceNames,
+    );
+  }
+
+  static String _resolveDeviceName(
+    Map<String, dynamic> profileMap,
+    String deviceId,
+  ) {
+    final rawName = profileMap['name']?.toString().trim();
+    if (rawName == null || rawName.isEmpty) {
+      return 'Device $deviceId';
+    }
+    return rawName;
+  }
+
+  static DateTime? _parseLastSeen(dynamic value, {DateTime? referenceTime}) {
     int? numeric;
     if (value is int) {
       numeric = value;
@@ -225,6 +301,77 @@ class FirebaseService {
       if (numeric == null) {
         return DateTime.tryParse(value);
       }
+    } else {
+      return null;
+    }
+
+    final reference = referenceTime ?? DateTime.now();
+    final referenceMs = reference.millisecondsSinceEpoch;
+    final candidates = <DateTime>[];
+
+    if (numeric.abs() >= _epochSecondsThreshold) {
+      candidates.add(DateTime.fromMillisecondsSinceEpoch(numeric * 1000));
+    }
+
+    final wrappedUnsigned = numeric & 0xFFFFFFFF;
+    final wrappedMs = _unwrap32BitMilliseconds(
+      wrappedUnsigned,
+      referenceMilliseconds: referenceMs,
+    );
+    candidates.add(DateTime.fromMillisecondsSinceEpoch(wrappedMs));
+
+    DateTime? best;
+    var bestDiff = _maxReasonableLastSeenDriftMs + 1;
+
+    for (final candidate in candidates) {
+      final diff = (candidate.millisecondsSinceEpoch - referenceMs).abs();
+      if (diff < bestDiff) {
+        best = candidate;
+        bestDiff = diff;
+      }
+    }
+
+    if (bestDiff > _maxReasonableLastSeenDriftMs) {
+      return null;
+    }
+
+    return best;
+  }
+
+  static int _unwrap32BitMilliseconds(
+    int wrappedMilliseconds, {
+    required int referenceMilliseconds,
+  }) {
+    final offset = referenceMilliseconds - wrappedMilliseconds;
+    var cycles = offset ~/ _uint32Mod;
+
+    final lowerCandidate = wrappedMilliseconds + (cycles * _uint32Mod);
+    final upperCandidate = wrappedMilliseconds + ((cycles + 1) * _uint32Mod);
+
+    if ((upperCandidate - referenceMilliseconds).abs() <
+        (lowerCandidate - referenceMilliseconds).abs()) {
+      cycles += 1;
+    }
+
+    return wrappedMilliseconds + (cycles * _uint32Mod);
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      final numeric = int.tryParse(value);
+      if (numeric == null) {
+        return DateTime.tryParse(value);
+      }
+      value = numeric;
+    }
+    int? numeric;
+    if (value is int) {
+      numeric = value;
+    } else if (value is double) {
+      numeric = value.toInt();
     }
 
     if (numeric == null) {
@@ -239,13 +386,6 @@ class FirebaseService {
       return DateTime.fromMillisecondsSinceEpoch(numeric * 1000);
     }
 
-    if (_deviceBootEpochMs == null ||
-        _lastUptimeMs == null ||
-        numeric < _lastUptimeMs!) {
-      _deviceBootEpochMs = DateTime.now().millisecondsSinceEpoch - numeric;
-    }
-    _lastUptimeMs = numeric;
-    final bootEpochMs = _deviceBootEpochMs ?? DateTime.now().millisecondsSinceEpoch;
-    return DateTime.fromMillisecondsSinceEpoch(bootEpochMs + numeric);
+    return null;
   }
 }

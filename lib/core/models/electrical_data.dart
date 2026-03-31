@@ -11,6 +11,15 @@ class ElectricalData {
   final double power;
   final double energy;
 
+  ElectricalData operator +(ElectricalData other) {
+    return ElectricalData(
+      voltage: voltage + other.voltage,
+      current: current + other.current,
+      power: power + other.power,
+      energy: energy + other.energy,
+    );
+  }
+
   factory ElectricalData.fromMap(Map<String, dynamic> map) {
     return ElectricalData(
       voltage: _toDouble(map['voltage']),
@@ -21,12 +30,7 @@ class ElectricalData {
   }
 
   static ElectricalData empty() {
-    return const ElectricalData(
-      voltage: 0,
-      current: 0,
-      power: 0,
-      energy: 0,
-    );
+    return const ElectricalData(voltage: 0, current: 0, power: 0, energy: 0);
   }
 
   static double _toDouble(dynamic value) {
