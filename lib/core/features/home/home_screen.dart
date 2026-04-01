@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final FirebaseService _firebaseService = FirebaseService.instance;
   late final PageController _pageController;
+  late final List<Widget> _pages;
   StreamSubscription<String>? _statusSubscription;
   String? _lastStatus;
   int _currentIndex = 0;
@@ -43,8 +44,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _currentIndex);
-    _statusSubscription =
-        _firebaseService.classificationStream.listen(_handleStatusUpdate);
+    _pages = [
+      DashboardPage(
+        firebaseService: _firebaseService,
+        onlineThresholdSeconds: _onlineThresholdSeconds,
+      ),
+      RoomMonitoringPage(firebaseService: _firebaseService),
+      RelayControlPage(firebaseService: _firebaseService),
+      const AccountInfoPage(),
+    ];
+    _statusSubscription = _firebaseService.classificationStream.listen(
+      _handleStatusUpdate,
+    );
   }
 
   void _handleStatusUpdate(String status) {
@@ -72,16 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      DashboardPage(
-        firebaseService: _firebaseService,
-        onlineThresholdSeconds: _onlineThresholdSeconds,
-      ),
-      RoomMonitoringPage(firebaseService: _firebaseService),
-      RelayControlPage(firebaseService: _firebaseService),
-      const AccountInfoPage(),
-    ];
-
     return Scaffold(
       appBar: AppBar(
         title: _AppBarTitle(
@@ -97,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentIndex = index;
           });
         },
-        children: pages,
+        children: _pages,
       ),
       bottomNavigationBar: CustomBottomNav(
         currentIndex: _currentIndex,

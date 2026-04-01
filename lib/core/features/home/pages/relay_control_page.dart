@@ -51,6 +51,14 @@ class _RelayControlPageState extends State<RelayControlPage>
     ),
   ];
 
+  late final Stream<List<String>> _deviceIdListStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _deviceIdListStream = widget.firebaseService.deviceIdListStream;
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -60,7 +68,7 @@ class _RelayControlPageState extends State<RelayControlPage>
         const SectionTitle(title: 'Kontrol Perangkat Listrik Per Ruangan'),
         const SizedBox(height: 12),
         StreamBuilder<List<String>>(
-          stream: widget.firebaseService.deviceIdListStream,
+          stream: _deviceIdListStream,
           builder: (context, snapshot) {
             final deviceIds = snapshot.data ?? const <String>[];
 

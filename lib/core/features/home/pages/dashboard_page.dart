@@ -64,7 +64,7 @@ class _DashboardPageState extends State<DashboardPage>
           },
         ),
         const SizedBox(height: 24),
-        const SectionTitle(title: 'Status Koneksi ESP32'),
+        const SectionTitle(title: 'Status Koneksi Perangkat'),
         const SizedBox(height: 12),
         StreamBuilder<DeviceConnectionSummary>(
           stream: _connectionSummaryStream,

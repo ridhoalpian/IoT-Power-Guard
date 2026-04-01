@@ -49,23 +49,30 @@ class FirebaseService {
   }
 
   Stream<ElectricalData> get electricalDataStream {
-    return _deviceRoot.onValue.map((event) {
-      final map = _asMap(event.snapshot.value);
-      var total = ElectricalData.empty();
-      for (final value in map.values) {
-        final deviceMap = _asMap(value);
-        final monitoringMap = _asMap(deviceMap['monitoring']);
-        total += ElectricalData.fromMap(monitoringMap);
-      }
-      return total;
-    });
+    return _deviceRoot.onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          var total = ElectricalData.empty();
+          for (final value in map.values) {
+            final deviceMap = _asMap(value);
+            final monitoringMap = _asMap(deviceMap['monitoring']);
+            total += ElectricalData.fromMap(monitoringMap);
+          }
+          return total;
+        })
+        .distinct(_electricalDataEquals);
   }
 
   Stream<ElectricalData> deviceMonitoringStream(String deviceId) {
-    return _deviceRoot.child(deviceId).child('monitoring').onValue.map((event) {
-      final map = _asMap(event.snapshot.value);
-      return ElectricalData.fromMap(map);
-    });
+    return _deviceRoot
+        .child(deviceId)
+        .child('monitoring')
+        .onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          return ElectricalData.fromMap(map);
+        })
+        .distinct(_electricalDataEquals);
   }
 
   Stream<DeviceProfile> deviceProfileStream(
@@ -223,7 +230,7 @@ class FirebaseService {
       },
     );
 
-    return controller.stream;
+    return controller.stream.distinct(_connectionSummaryEquals);
   }
 
   Future<void> setDeviceProfile(
@@ -336,6 +343,28 @@ class FirebaseService {
       }
     }
     return true;
+  }
+
+  static bool _electricalDataEquals(
+    ElectricalData previous,
+    ElectricalData next,
+  ) {
+    return previous.voltage == next.voltage &&
+        previous.current == next.current &&
+        previous.power == next.power &&
+        previous.energy == next.energy;
+  }
+
+  static bool _connectionSummaryEquals(
+    DeviceConnectionSummary previous,
+    DeviceConnectionSummary next,
+  ) {
+    return previous.totalDevices == next.totalDevices &&
+        previous.onlineDevices == next.onlineDevices &&
+        previous.offlineDevices == next.offlineDevices &&
+        previous.latestLastSeen == next.latestLastSeen &&
+        _stringListEquals(previous.onlineDeviceNames, next.onlineDeviceNames) &&
+        _stringListEquals(previous.offlineDeviceNames, next.offlineDeviceNames);
   }
 
   DeviceConnectionSummary _buildConnectionSummary(

@@ -40,6 +40,14 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
     return Icons.memory_outlined;
   }
 
+  late final Stream<List<String>> _deviceIdListStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _deviceIdListStream = widget.firebaseService.deviceIdListStream;
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -49,7 +57,7 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
         const SectionTitle(title: 'Monitoring Konsumsi Tiap Ruangan'),
         const SizedBox(height: 12),
         StreamBuilder<List<String>>(
-          stream: widget.firebaseService.deviceIdListStream,
+          stream: _deviceIdListStream,
           builder: (context, snapshot) {
             final deviceIds = snapshot.data ?? const <String>[];
 
@@ -80,8 +88,7 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
                     defaultIconKey: _defaultIconKey,
                     iconFromKey: _iconFromKey,
                   ),
-                  if (index != deviceIds.length - 1)
-                    const SizedBox(height: 16),
+                  if (index != deviceIds.length - 1) const SizedBox(height: 16),
                 ],
               ],
             );
@@ -120,9 +127,10 @@ class _DeviceMonitoringCard extends StatelessWidget {
 
   void _showEditSheet(BuildContext context, DeviceProfile profile) {
     final controller = TextEditingController(text: profile.name);
-    String selectedIconKey = iconOptions.any((option) => option.key == profile.iconKey)
-        ? profile.iconKey
-        : defaultIconKey;
+    String selectedIconKey =
+        iconOptions.any((option) => option.key == profile.iconKey)
+            ? profile.iconKey
+            : defaultIconKey;
 
     showModalBottomSheet<void>(
       context: context,
@@ -205,22 +213,26 @@ class _DeviceMonitoringCard extends StatelessWidget {
                                   height: 48,
                                   width: 48,
                                   decoration: BoxDecoration(
-                                    color: option.key == selectedIconKey
-                                        ? const Color(0xFF0A7A6F)
-                                            .withValues(alpha: 0.12)
-                                        : const Color(0xFFF9FAFB),
+                                    color:
+                                        option.key == selectedIconKey
+                                            ? const Color(
+                                              0xFF0A7A6F,
+                                            ).withValues(alpha: 0.12)
+                                            : const Color(0xFFF9FAFB),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: option.key == selectedIconKey
-                                          ? const Color(0xFF0A7A6F)
-                                          : const Color(0xFFE5E7EB),
+                                      color:
+                                          option.key == selectedIconKey
+                                              ? const Color(0xFF0A7A6F)
+                                              : const Color(0xFFE5E7EB),
                                     ),
                                   ),
                                   child: Icon(
                                     option.icon,
-                                    color: option.key == selectedIconKey
-                                        ? const Color(0xFF0A7A6F)
-                                        : const Color(0xFF6B7280),
+                                    color:
+                                        option.key == selectedIconKey
+                                            ? const Color(0xFF0A7A6F)
+                                            : const Color(0xFF6B7280),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -300,7 +312,8 @@ class _DeviceMonitoringCard extends StatelessWidget {
               fallbackIconKey: defaultIconKey,
             ),
             builder: (context, snapshot) {
-              final profile = snapshot.data ??
+              final profile =
+                  snapshot.data ??
                   DeviceProfile(
                     name: 'Device $deviceId',
                     iconKey: defaultIconKey,
