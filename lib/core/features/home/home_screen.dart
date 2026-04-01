@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const int _onlineThresholdSeconds = 5;
+  static const int _onlineThresholdSeconds = 20;
 
   final FirebaseService _firebaseService = FirebaseService.instance;
   late final PageController _pageController;

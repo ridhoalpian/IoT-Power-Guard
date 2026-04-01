@@ -341,10 +341,6 @@ class ConnectionStatusCard extends StatelessWidget {
             ],
           ],
           const SizedBox(height: 6),
-          Text(
-            'Perangkat dianggap online jika update < $thresholdSeconds detik.',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
         ],
       ),
     );

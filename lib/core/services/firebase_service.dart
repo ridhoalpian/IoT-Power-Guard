@@ -18,7 +18,7 @@ class FirebaseService {
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
   static const String _iotRootPath = 'iot_power_guard';
   static const int _defaultRelayCount = 3;
-  static const int _deviceOfflineThresholdMs = 5000;
+  static const int _deviceOfflineThresholdMs = 20000;
   static const int _epochMsThreshold = 1000000000000;
   static const int _epochSecondsThreshold = 1000000000;
   static const int _uint32Mod = 4294967296;
