@@ -73,19 +73,26 @@ class FirebaseService {
     required String fallbackName,
     required String fallbackIconKey,
   }) {
-    return _deviceRoot.child(deviceId).child('profile').onValue.map((event) {
-      final map = _asMap(event.snapshot.value);
-      final nameValue = map['name']?.toString().trim();
-      final iconValue = map['icon']?.toString().trim();
-      return DeviceProfile(
-        name:
-            (nameValue == null || nameValue.isEmpty) ? fallbackName : nameValue,
-        iconKey:
-            (iconValue == null || iconValue.isEmpty)
-                ? fallbackIconKey
-                : iconValue,
-      );
-    });
+    return _deviceRoot
+        .child(deviceId)
+        .child('profile')
+        .onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          final nameValue = map['name']?.toString().trim();
+          final iconValue = map['icon']?.toString().trim();
+          return DeviceProfile(
+            name:
+                (nameValue == null || nameValue.isEmpty)
+                    ? fallbackName
+                    : nameValue,
+            iconKey:
+                (iconValue == null || iconValue.isEmpty)
+                    ? fallbackIconKey
+                    : iconValue,
+          );
+        })
+        .distinct(_deviceProfileEquals);
   }
 
   Stream<String> get classificationStream {
@@ -99,16 +106,18 @@ class FirebaseService {
   }
 
   Stream<List<String>> get deviceIdListStream {
-    return _deviceRoot.onValue.map((event) {
-      final map = _asMap(event.snapshot.value);
-      final deviceIds =
-          map.entries
-              .where((entry) => entry.value is Map)
-              .map((entry) => entry.key)
-              .toList();
-      deviceIds.sort();
-      return deviceIds;
-    });
+    return _deviceRoot.onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          final deviceIds =
+              map.entries
+                  .where((entry) => entry.value is Map)
+                  .map((entry) => entry.key)
+                  .toList();
+          deviceIds.sort();
+          return deviceIds;
+        })
+        .distinct(_stringListEquals);
   }
 
   Stream<Map<int, bool>> relayStateStream(String deviceId) {
@@ -117,25 +126,61 @@ class FirebaseService {
         .orderByKey()
         .startAt('relay')
         .endAt('relay\uf8ff');
-    return query.onValue.map((event) {
-      final map = _asMap(event.snapshot.value);
-      final result = <int, bool>{};
-      for (final entry in map.entries) {
-        final key = entry.key.toLowerCase();
-        if (!key.startsWith('relay')) {
-          continue;
-        }
-        final relayNumber = int.tryParse(key.replaceFirst('relay', ''));
-        if (relayNumber == null) {
-          continue;
-        }
-        result[relayNumber] = _toBool(entry.value);
-      }
-      for (var index = 1; index <= _defaultRelayCount; index++) {
-        result.putIfAbsent(index, () => false);
-      }
-      return result;
-    });
+    return query.onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          final result = <int, bool>{};
+          for (final entry in map.entries) {
+            final key = entry.key.toLowerCase();
+            if (!key.startsWith('relay')) {
+              continue;
+            }
+            final relayNumber = int.tryParse(key.replaceFirst('relay', ''));
+            if (relayNumber == null) {
+              continue;
+            }
+            result[relayNumber] = _toBool(entry.value);
+          }
+          for (var index = 1; index <= _defaultRelayCount; index++) {
+            result.putIfAbsent(index, () => false);
+          }
+          return result;
+        })
+        .distinct(_boolMapEquals);
+  }
+
+  Stream<Map<int, String>> relayLabelStream(
+    String deviceId, {
+    Map<int, String> fallbackLabels = const {},
+  }) {
+    return _deviceRoot
+        .child(deviceId)
+        .child('relay_labels')
+        .onValue
+        .map((event) {
+          final map = _asMap(event.snapshot.value);
+          final result = <int, String>{};
+          for (final entry in map.entries) {
+            final key = entry.key.toLowerCase();
+            if (!key.startsWith('relay')) {
+              continue;
+            }
+            final relayNumber = int.tryParse(key.replaceFirst('relay', ''));
+            if (relayNumber == null) {
+              continue;
+            }
+            final label = entry.value?.toString().trim();
+            if (label == null || label.isEmpty) {
+              continue;
+            }
+            result[relayNumber] = label;
+          }
+          for (final entry in fallbackLabels.entries) {
+            result.putIfAbsent(entry.key, () => entry.value);
+          }
+          return result;
+        })
+        .distinct(_stringMapEquals);
   }
 
   Stream<DeviceConnectionSummary> deviceConnectionSummaryStream({
@@ -199,6 +244,22 @@ class FirebaseService {
     return _deviceRoot.child(deviceId).child('profile').update(updates);
   }
 
+  Future<void> setRelayLabel(
+    String deviceId, {
+    required int relayNumber,
+    String? name,
+  }) {
+    final label = name?.trim();
+    final reference = _deviceRoot
+        .child(deviceId)
+        .child('relay_labels')
+        .child('relay$relayNumber');
+    if (label == null || label.isEmpty) {
+      return reference.remove();
+    }
+    return reference.set(label);
+  }
+
   Future<void> setRelay(int relayNumber, bool isOn, String deviceId) {
     return _deviceRoot.child(deviceId).child('relay$relayNumber').set(isOn);
   }
@@ -223,6 +284,58 @@ class FirebaseService {
           value.toLowerCase() == 'on';
     }
     return false;
+  }
+
+  static bool _deviceProfileEquals(DeviceProfile previous, DeviceProfile next) {
+    return previous.name == next.name && previous.iconKey == next.iconKey;
+  }
+
+  static bool _stringListEquals(List<String> previous, List<String> next) {
+    if (identical(previous, next)) {
+      return true;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index] != next[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _boolMapEquals(Map<int, bool> previous, Map<int, bool> next) {
+    if (identical(previous, next)) {
+      return true;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (final entry in previous.entries) {
+      if (next[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _stringMapEquals(
+    Map<int, String> previous,
+    Map<int, String> next,
+  ) {
+    if (identical(previous, next)) {
+      return true;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (final entry in previous.entries) {
+      if (next[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
   }
 
   DeviceConnectionSummary _buildConnectionSummary(

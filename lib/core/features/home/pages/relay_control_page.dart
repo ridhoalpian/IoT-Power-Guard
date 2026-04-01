@@ -44,9 +44,9 @@ class _RelayControlPageState extends State<RelayControlPage>
       name: 'Kontrol Utama',
       icon: Icons.power_outlined,
       devices: [
-        _RelayDevice(relayNumber: 1, name: 'Perangkat 1'),
-        _RelayDevice(relayNumber: 2, name: 'Perangkat 2'),
-        _RelayDevice(relayNumber: 3, name: 'Perangkat 3'),
+        _RelayDevice(relayNumber: 1, defaultName: 'Perangkat 1'),
+        _RelayDevice(relayNumber: 2, defaultName: 'Perangkat 2'),
+        _RelayDevice(relayNumber: 3, defaultName: 'Perangkat 3'),
       ],
     ),
   ];
@@ -92,8 +92,7 @@ class _RelayControlPageState extends State<RelayControlPage>
                     defaultIconKey: _defaultIconKey,
                     iconFromKey: _iconFromKey,
                   ),
-                  if (index != deviceIds.length - 1)
-                    const SizedBox(height: 16),
+                  if (index != deviceIds.length - 1) const SizedBox(height: 16),
                 ],
               ],
             );
@@ -123,6 +122,11 @@ class _DeviceRelaySection extends StatelessWidget {
   final List<_IconOption> iconOptions;
   final String defaultIconKey;
   final IconData Function(String? key) iconFromKey;
+
+  Map<int, String> get _defaultRelayLabels => {
+    for (final room in rooms)
+      for (final device in room.devices) device.relayNumber: device.defaultName,
+  };
 
   void _showEditSheet(BuildContext context, DeviceProfile profile) {
     final controller = TextEditingController(text: profile.name);
@@ -212,22 +216,26 @@ class _DeviceRelaySection extends StatelessWidget {
                                   height: 48,
                                   width: 48,
                                   decoration: BoxDecoration(
-                                    color: option.key == selectedIconKey
-                                        ? const Color(0xFF0A7A6F)
-                                            .withValues(alpha: 0.12)
-                                        : const Color(0xFFF9FAFB),
+                                    color:
+                                        option.key == selectedIconKey
+                                            ? const Color(
+                                              0xFF0A7A6F,
+                                            ).withValues(alpha: 0.12)
+                                            : const Color(0xFFF9FAFB),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: option.key == selectedIconKey
-                                          ? const Color(0xFF0A7A6F)
-                                          : const Color(0xFFE5E7EB),
+                                      color:
+                                          option.key == selectedIconKey
+                                              ? const Color(0xFF0A7A6F)
+                                              : const Color(0xFFE5E7EB),
                                     ),
                                   ),
                                   child: Icon(
                                     option.icon,
-                                    color: option.key == selectedIconKey
-                                        ? const Color(0xFF0A7A6F)
-                                        : const Color(0xFF6B7280),
+                                    color:
+                                        option.key == selectedIconKey
+                                            ? const Color(0xFF0A7A6F)
+                                            : const Color(0xFF6B7280),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -282,6 +290,100 @@ class _DeviceRelaySection extends StatelessWidget {
     );
   }
 
+  void _showRelayNameSheet(
+    BuildContext context, {
+    required int relayNumber,
+    required String currentName,
+    required String fallbackName,
+  }) {
+    final controller = TextEditingController(text: currentName);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Rename Relay $relayNumber',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: 'Nama Perangkat',
+                  hintText: fallbackName,
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Kosongkan nama untuk kembali ke label default.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    firebaseService.setRelayLabel(
+                      deviceId,
+                      relayNumber: relayNumber,
+                      name: controller.text,
+                    );
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0A7A6F),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Simpan'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -309,7 +411,8 @@ class _DeviceRelaySection extends StatelessWidget {
                     fallbackIconKey: defaultIconKey,
                   ),
                   builder: (context, snapshot) {
-                    final profile = snapshot.data ??
+                    final profile =
+                        snapshot.data ??
                         DeviceProfile(
                           name: 'Device $deviceId',
                           iconKey: defaultIconKey,
@@ -344,23 +447,41 @@ class _DeviceRelaySection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          StreamBuilder<Map<int, bool>>(
-            stream: firebaseService.relayStateStream(deviceId),
+          StreamBuilder<Map<int, String>>(
+            stream: firebaseService.relayLabelStream(
+              deviceId,
+              fallbackLabels: _defaultRelayLabels,
+            ),
             builder: (context, snapshot) {
-              final relayState = snapshot.data ?? <int, bool>{};
-              return Column(
-                children: [
-                  for (final room in rooms) ...[
-                    _RoomRelayCard(
-                      room: room,
-                      relayState: relayState,
-                      onChanged: (relay, value) {
-                        firebaseService.setRelay(relay, value, deviceId);
-                      },
-                    ),
-                    if (room != rooms.last) const SizedBox(height: 12),
-                  ],
-                ],
+              final relayLabels = snapshot.data ?? _defaultRelayLabels;
+              return StreamBuilder<Map<int, bool>>(
+                stream: firebaseService.relayStateStream(deviceId),
+                builder: (context, snapshot) {
+                  final relayState = snapshot.data ?? <int, bool>{};
+                  return Column(
+                    children: [
+                      for (final room in rooms) ...[
+                        _RoomRelayCard(
+                          room: room,
+                          relayState: relayState,
+                          relayLabels: relayLabels,
+                          onChanged: (relay, value) {
+                            firebaseService.setRelay(relay, value, deviceId);
+                          },
+                          onRename: (relayNumber, currentName, fallbackName) {
+                            _showRelayNameSheet(
+                              context,
+                              relayNumber: relayNumber,
+                              currentName: currentName,
+                              fallbackName: fallbackName,
+                            );
+                          },
+                        ),
+                        if (room != rooms.last) const SizedBox(height: 12),
+                      ],
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -391,25 +512,27 @@ class _IconOption {
 }
 
 class _RelayDevice {
-  const _RelayDevice({
-    required this.relayNumber,
-    required this.name,
-  });
+  const _RelayDevice({required this.relayNumber, required this.defaultName});
 
   final int relayNumber;
-  final String name;
+  final String defaultName;
 }
 
 class _RoomRelayCard extends StatelessWidget {
   const _RoomRelayCard({
     required this.room,
     required this.relayState,
+    required this.relayLabels,
     required this.onChanged,
+    required this.onRename,
   });
 
   final _RoomRelayConfig room;
   final Map<int, bool> relayState;
+  final Map<int, String> relayLabels;
   final void Function(int relay, bool value) onChanged;
+  final void Function(int relayNumber, String currentName, String fallbackName)
+  onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -437,9 +560,7 @@ class _RoomRelayCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     room.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 Text(
@@ -455,11 +576,20 @@ class _RoomRelayCard extends StatelessWidget {
           const Divider(height: 1),
           for (var index = 0; index < room.devices.length; index++) ...[
             _RelayDeviceTile(
-              title: room.devices[index].name,
+              title:
+                  relayLabels[room.devices[index].relayNumber] ??
+                  room.devices[index].defaultName,
               relayNumber: room.devices[index].relayNumber,
               value: relayState[room.devices[index].relayNumber] ?? false,
-              onChanged: (value) =>
-                  onChanged(room.devices[index].relayNumber, value),
+              onChanged:
+                  (value) => onChanged(room.devices[index].relayNumber, value),
+              onRename:
+                  () => onRename(
+                    room.devices[index].relayNumber,
+                    relayLabels[room.devices[index].relayNumber] ??
+                        room.devices[index].defaultName,
+                    room.devices[index].defaultName,
+                  ),
             ),
             if (index != room.devices.length - 1) const Divider(height: 1),
           ],
@@ -475,12 +605,14 @@ class _RelayDeviceTile extends StatelessWidget {
     required this.relayNumber,
     required this.value,
     required this.onChanged,
+    required this.onRename,
   });
 
   final String title;
   final int relayNumber;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final VoidCallback onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -490,11 +622,21 @@ class _RelayDeviceTile extends StatelessWidget {
         Icons.electrical_services_outlined,
         color: Color(0xFF0A7A6F),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Rename perangkat',
+            onPressed: onRename,
+            icon: const Icon(Icons.edit_outlined, color: Color(0xFF6B7280)),
+          ),
+        ],
       ),
-      subtitle: Text('Relay $relayNumber'),
       value: value,
       onChanged: onChanged,
       activeColor: const Color(0xFF0A7A6F),
