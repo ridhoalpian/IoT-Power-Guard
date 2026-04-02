@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/dashboard_snapshot.dart';
 import '../models/device_connection_summary.dart';
 import '../models/device_profile.dart';
 import '../models/electrical_data.dart';
@@ -25,6 +26,29 @@ class FirebaseService {
   static const int _maxReasonableLastSeenDriftMs = 31536000000;
   static const String _userEmail = 'ridhoalpian8713@gmail.com';
   static const String _userPassword = 'ridho8733';
+  static const double _lowConsumptionThresholdWatts = 150;
+  static const double _mediumConsumptionThresholdWatts = 400;
+  static const List<_DashboardRoomConfig> _dashboardRoomConfigs = [
+    _DashboardRoomConfig(
+      label: 'Dapur',
+      aliases: ['dapur', 'kitchen', 'device1', 'esp32_1'],
+    ),
+    _DashboardRoomConfig(
+      label: 'Kamar',
+      aliases: ['kamar', 'bedroom', 'bed', 'device2', 'esp32_2'],
+    ),
+    _DashboardRoomConfig(
+      label: 'Ruang Tengah',
+      aliases: [
+        'ruang tengah',
+        'ruang_tengah',
+        'living room',
+        'living',
+        'device3',
+        'esp32_3',
+      ],
+    ),
+  ];
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -110,6 +134,49 @@ class FirebaseService {
       }
       return value.toString();
     }).distinct();
+  }
+
+  Stream<DashboardSnapshot> dashboardSnapshotStream({
+    Duration? offlineThreshold,
+  }) {
+    final threshold =
+        offlineThreshold ??
+        const Duration(milliseconds: _deviceOfflineThresholdMs);
+    late final StreamController<DashboardSnapshot> controller;
+    StreamSubscription<Map<String, dynamic>>? subscription;
+    Timer? timer;
+    Map<String, dynamic> latestDeviceState = const {};
+
+    void emitSnapshot() {
+      if (controller.isClosed) {
+        return;
+      }
+      controller.add(
+        _buildDashboardSnapshot(latestDeviceState, offlineThreshold: threshold),
+      );
+    }
+
+    controller = StreamController<DashboardSnapshot>.broadcast(
+      onListen: () {
+        subscription = _deviceRoot.onValue
+            .map((event) {
+              return _asMap(event.snapshot.value);
+            })
+            .listen((value) {
+              latestDeviceState = value;
+              emitSnapshot();
+            }, onError: controller.addError);
+        timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          emitSnapshot();
+        });
+      },
+      onCancel: () async {
+        await subscription?.cancel();
+        timer?.cancel();
+      },
+    );
+
+    return controller.stream.distinct(_dashboardSnapshotEquals);
   }
 
   Stream<List<String>> get deviceIdListStream {
@@ -367,6 +434,38 @@ class FirebaseService {
         _stringListEquals(previous.offlineDeviceNames, next.offlineDeviceNames);
   }
 
+  static bool _dashboardSnapshotEquals(
+    DashboardSnapshot previous,
+    DashboardSnapshot next,
+  ) {
+    if (!_electricalDataEquals(
+      previous.totalConsumption,
+      next.totalConsumption,
+    )) {
+      return false;
+    }
+    if (previous.latestLastSeen != next.latestLastSeen) {
+      return false;
+    }
+    if (previous.rooms.length != next.rooms.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.rooms.length; index++) {
+      final prevRoom = previous.rooms[index];
+      final nextRoom = next.rooms[index];
+      if (prevRoom.roomName != nextRoom.roomName ||
+          prevRoom.deviceId != nextRoom.deviceId ||
+          prevRoom.classification != nextRoom.classification ||
+          prevRoom.isOnline != nextRoom.isOnline ||
+          prevRoom.lastSeen != nextRoom.lastSeen ||
+          prevRoom.hasAssignedDevice != nextRoom.hasAssignedDevice ||
+          !_electricalDataEquals(prevRoom.monitoring, nextRoom.monitoring)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   DeviceConnectionSummary _buildConnectionSummary(
     Map<String, dynamic> deviceStateById, {
     required Duration offlineThreshold,
@@ -419,6 +518,168 @@ class FirebaseService {
       onlineDeviceNames: onlineDeviceNames,
       offlineDeviceNames: offlineDeviceNames,
     );
+  }
+
+  DashboardSnapshot _buildDashboardSnapshot(
+    Map<String, dynamic> deviceStateById, {
+    required Duration offlineThreshold,
+  }) {
+    if (deviceStateById.isEmpty) {
+      return DashboardSnapshot.empty();
+    }
+
+    final now = DateTime.now();
+    final resolvedDevices = <_ResolvedDashboardDevice>[];
+    var totalConsumption = ElectricalData.empty();
+    DateTime? latestLastSeen;
+
+    for (final entry in deviceStateById.entries) {
+      final deviceId = entry.key;
+      final deviceMap = _asMap(entry.value);
+      final profileMap = _asMap(deviceMap['profile']);
+      final monitoringMap = _asMap(deviceMap['monitoring']);
+      final monitoring = ElectricalData.fromMap(monitoringMap);
+      final deviceName = _resolveDeviceName(profileMap, deviceId);
+      final monitoringTimestamp = _parseDateTime(monitoringMap['timestamp']);
+      final lastSeen = _parseLastSeen(
+        deviceMap['last_seen'],
+        referenceTime: monitoringTimestamp ?? now,
+      );
+      final isOnline =
+          lastSeen != null &&
+          now.difference(lastSeen).inMilliseconds <=
+              offlineThreshold.inMilliseconds;
+
+      resolvedDevices.add(
+        _ResolvedDashboardDevice(
+          deviceId: deviceId,
+          name: deviceName,
+          monitoring: monitoring,
+          classification:
+              _resolveConsumptionLevel(deviceMap, monitoringMap) ??
+              _classifyByPower(monitoring.power),
+          isOnline: isOnline,
+          lastSeen: lastSeen,
+        ),
+      );
+      totalConsumption += monitoring;
+      if (lastSeen != null &&
+          (latestLastSeen == null || lastSeen.isAfter(latestLastSeen))) {
+        latestLastSeen = lastSeen;
+      }
+    }
+
+    final roomAssignments = _assignDashboardRooms(resolvedDevices);
+    final rooms = _dashboardRoomConfigs
+        .map((config) {
+          final assignedDevice = roomAssignments[config.label];
+          if (assignedDevice == null) {
+            return RoomDashboardData.placeholder(config.label);
+          }
+          return RoomDashboardData(
+            roomName: config.label,
+            deviceId: assignedDevice.deviceId,
+            monitoring: assignedDevice.monitoring,
+            classification: assignedDevice.classification,
+            isOnline: assignedDevice.isOnline,
+            lastSeen: assignedDevice.lastSeen,
+            hasAssignedDevice: true,
+          );
+        })
+        .toList(growable: false);
+
+    return DashboardSnapshot(
+      rooms: rooms,
+      totalConsumption: totalConsumption,
+      latestLastSeen: latestLastSeen,
+    );
+  }
+
+  Map<String, _ResolvedDashboardDevice> _assignDashboardRooms(
+    List<_ResolvedDashboardDevice> devices,
+  ) {
+    final assignments = <String, _ResolvedDashboardDevice>{};
+    final remainingDevices = List<_ResolvedDashboardDevice>.from(devices);
+
+    for (final config in _dashboardRoomConfigs) {
+      _ResolvedDashboardDevice? match;
+      for (final device in remainingDevices) {
+        if (_matchesRoomConfig(device, config)) {
+          match = device;
+          break;
+        }
+      }
+      if (match == null) {
+        continue;
+      }
+      assignments[config.label] = match;
+      remainingDevices.remove(match);
+    }
+
+    for (final config in _dashboardRoomConfigs) {
+      if (assignments.containsKey(config.label) || remainingDevices.isEmpty) {
+        continue;
+      }
+      assignments[config.label] = remainingDevices.removeAt(0);
+    }
+
+    return assignments;
+  }
+
+  bool _matchesRoomConfig(
+    _ResolvedDashboardDevice device,
+    _DashboardRoomConfig config,
+  ) {
+    final normalizedName = device.name.toLowerCase();
+    final normalizedId = device.deviceId.toLowerCase();
+    for (final alias in config.aliases) {
+      if (normalizedName.contains(alias) || normalizedId.contains(alias)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  ConsumptionLevel _classifyByPower(double power) {
+    if (power >= _mediumConsumptionThresholdWatts) {
+      return ConsumptionLevel.high;
+    }
+    if (power >= _lowConsumptionThresholdWatts) {
+      return ConsumptionLevel.medium;
+    }
+    return ConsumptionLevel.low;
+  }
+
+  ConsumptionLevel? _resolveConsumptionLevel(
+    Map<String, dynamic> deviceMap,
+    Map<String, dynamic> monitoringMap,
+  ) {
+    final knnMap = _asMap(deviceMap['knn']);
+    return _parseConsumptionLevel(knnMap['classification']) ??
+        _parseConsumptionLevel(deviceMap['classification']) ??
+        _parseConsumptionLevel(deviceMap['knn_classification']) ??
+        _parseConsumptionLevel(monitoringMap['classification']);
+  }
+
+  ConsumptionLevel? _parseConsumptionLevel(dynamic value) {
+    final normalized = value?.toString().trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    if (normalized == 'low' || normalized == 'normal' || normalized == 'aman') {
+      return ConsumptionLevel.low;
+    }
+    if (normalized == 'medium' ||
+        normalized == 'sedang' ||
+        normalized == 'waspada') {
+      return ConsumptionLevel.medium;
+    }
+    if (normalized == 'high' ||
+        normalized == 'tinggi' ||
+        normalized == 'boros') {
+      return ConsumptionLevel.high;
+    }
+    return null;
   }
 
   static String _resolveDeviceName(
@@ -530,4 +791,29 @@ class FirebaseService {
 
     return null;
   }
+}
+
+class _DashboardRoomConfig {
+  const _DashboardRoomConfig({required this.label, required this.aliases});
+
+  final String label;
+  final List<String> aliases;
+}
+
+class _ResolvedDashboardDevice {
+  const _ResolvedDashboardDevice({
+    required this.deviceId,
+    required this.name,
+    required this.monitoring,
+    required this.classification,
+    required this.isOnline,
+    required this.lastSeen,
+  });
+
+  final String deviceId;
+  final String name;
+  final ElectricalData monitoring;
+  final ConsumptionLevel classification;
+  final bool isOnline;
+  final DateTime? lastSeen;
 }

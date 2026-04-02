@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../models/device_connection_summary.dart';
-import '../../../models/electrical_data.dart';
+import '../../../models/dashboard_snapshot.dart';
 import '../../../services/firebase_service.dart';
 import '../widgets/home_widgets.dart';
 
@@ -22,60 +21,66 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage>
     with AutomaticKeepAliveClientMixin<DashboardPage> {
   late final Stream<String> _classificationStream;
-  late final Stream<ElectricalData> _electricalDataStream;
-  late final Stream<DeviceConnectionSummary> _connectionSummaryStream;
+  late final Stream<DashboardSnapshot> _dashboardSnapshotStream;
 
   @override
   void initState() {
     super.initState();
     _classificationStream = widget.firebaseService.classificationStream;
-    _electricalDataStream = widget.firebaseService.electricalDataStream;
-    _connectionSummaryStream = widget.firebaseService
-        .deviceConnectionSummaryStream(
-          offlineThreshold: Duration(seconds: widget.onlineThresholdSeconds),
-        );
+    _dashboardSnapshotStream = widget.firebaseService.dashboardSnapshotStream(
+      offlineThreshold: Duration(seconds: widget.onlineThresholdSeconds),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-      children: [
-        const SectionTitle(title: 'Status Konsumsi'),
-        const SizedBox(height: 12),
-        StreamBuilder<String>(
-          stream: _classificationStream,
-          builder: (context, snapshot) {
-            final status = snapshot.data ?? 'Normal';
-            return KnnStatusCard(status: status);
-          },
-        ),
-        const SizedBox(height: 24),
-        const SectionTitle(
-          title: 'Dashboard Monitoring Real-Time (Keseluruhan IoT)',
-        ),
-        const SizedBox(height: 12),
-        StreamBuilder<ElectricalData>(
-          stream: _electricalDataStream,
-          builder: (context, snapshot) {
-            final data = snapshot.data ?? ElectricalData.empty();
-            return MetricsGrid(data: data);
-          },
-        ),
-        const SizedBox(height: 24),
-        const SectionTitle(title: 'Status Koneksi Perangkat'),
-        const SizedBox(height: 12),
-        StreamBuilder<DeviceConnectionSummary>(
-          stream: _connectionSummaryStream,
-          builder: (context, snapshot) {
-            return ConnectionStatusCard(
-              summary: snapshot.data ?? DeviceConnectionSummary.empty(),
-              thresholdSeconds: widget.onlineThresholdSeconds,
+    return StreamBuilder<String>(
+      stream: _classificationStream,
+      builder: (context, classificationSnapshot) {
+        final globalStatus = classificationSnapshot.data ?? 'Normal';
+        return StreamBuilder<DashboardSnapshot>(
+          stream: _dashboardSnapshotStream,
+          builder: (context, dashboardSnapshot) {
+            final dashboard =
+                dashboardSnapshot.data ?? DashboardSnapshot.empty();
+            final highRooms = dashboard.highConsumptionRooms;
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              children: [
+                const SectionTitle(title: 'Status Konsumsi'),
+                const SizedBox(height: 12),
+                GlobalStatusCard(status: globalStatus),
+                const SizedBox(height: 24),
+                const SectionTitle(title: 'Konsumsi per Ruangan'),
+                const SizedBox(height: 12),
+                DeviceClassificationCard(rooms: dashboard.rooms),
+                if (highRooms.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  AlertCard(rooms: highRooms),
+                ],
+                const SizedBox(height: 24),
+                const SectionTitle(title: 'Total Konsumsi Rumah'),
+                const SizedBox(height: 12),
+                TotalConsumptionCard(
+                  totalConsumption: dashboard.totalConsumption,
+                ),
+                const SizedBox(height: 24),
+                // const SectionTitle(
+                //   title: 'Dashboard Monitoring Real-Time (Keseluruhan IoT)',
+                // ),
+                // const SizedBox(height: 12),
+                // MetricsGrid(data: dashboard.totalConsumption),
+                // const SizedBox(height: 24),
+                const SectionTitle(title: 'Status Koneksi Perangkat'),
+                const SizedBox(height: 12),
+                DeviceStatusCard(snapshot: dashboard),
+              ],
             );
           },
-        ),
-      ],
+        );
+      },
     );
   }
 
