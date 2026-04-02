@@ -23,16 +23,58 @@ class SectionTitle extends StatelessWidget {
 }
 
 class MetricsGrid extends StatelessWidget {
-  const MetricsGrid({super.key, required this.data, this.elevated = true});
+  const MetricsGrid({
+    super.key,
+    required this.data,
+    this.elevated = true,
+    this.showPowerAndEnergy = true,
+    this.useAggregateLabels = true,
+  });
 
   final ElectricalData data;
   final bool elevated;
+  final bool showPowerAndEnergy;
+  final bool useAggregateLabels;
 
   @override
   Widget build(BuildContext context) {
+    final metrics = [
+      MetricCard(
+        title: useAggregateLabels ? 'Rata-Rata Tegangan' : 'Tegangan',
+        value: data.voltage.toStringAsFixed(1),
+        unit: 'Volt',
+        icon: Icons.electric_bolt,
+        elevated: elevated,
+      ),
+      MetricCard(
+        title: useAggregateLabels ? 'Total Arus' : 'Arus',
+        value: data.current.toStringAsFixed(2),
+        unit: 'Ampere',
+        icon: Icons.speed,
+        elevated: elevated,
+      ),
+      if (showPowerAndEnergy) ...[
+        MetricCard(
+          title: 'Daya',
+          value: data.power.toStringAsFixed(1),
+          unit: 'Watt',
+          icon: Icons.bolt,
+          elevated: elevated,
+        ),
+        MetricCard(
+          title: 'Energi',
+          value: data.energy.toStringAsFixed(3),
+          unit: 'kWh',
+          icon: Icons.battery_charging_full,
+          elevated: elevated,
+        ),
+      ],
+    ];
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth >= 640 ? 4 : 2;
+        final crossAxisCount =
+            constraints.maxWidth >= 640 && metrics.length > 2 ? 4 : 2;
         final aspectRatio = crossAxisCount == 4 ? 1.05 : 1.4;
         return GridView.count(
           crossAxisCount: crossAxisCount,
@@ -41,36 +83,7 @@ class MetricsGrid extends StatelessWidget {
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           childAspectRatio: aspectRatio,
-          children: [
-            MetricCard(
-              title: 'Rata-Rata Tegangan',
-              value: data.voltage.toStringAsFixed(1),
-              unit: 'Volt',
-              icon: Icons.electric_bolt,
-              elevated: elevated,
-            ),
-            MetricCard(
-              title: 'Total Arus',
-              value: data.current.toStringAsFixed(2),
-              unit: 'Ampere',
-              icon: Icons.speed,
-              elevated: elevated,
-            ),
-            MetricCard(
-              title: 'Daya',
-              value: data.power.toStringAsFixed(1),
-              unit: 'Watt',
-              icon: Icons.bolt,
-              elevated: elevated,
-            ),
-            MetricCard(
-              title: 'Energi',
-              value: data.energy.toStringAsFixed(3),
-              unit: 'kWh',
-              icon: Icons.battery_charging_full,
-              elevated: elevated,
-            ),
-          ],
+          children: metrics,
         );
       },
     );

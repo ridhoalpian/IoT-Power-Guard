@@ -357,7 +357,11 @@ class _DeviceMonitoringCard extends StatelessWidget {
             stream: firebaseService.deviceMonitoringStream(deviceId),
             builder: (context, snapshot) {
               final data = snapshot.data ?? ElectricalData.empty();
-              return MetricsGrid(data: data, elevated: false);
+              return MetricsGrid(
+                data: data,
+                elevated: false,
+                useAggregateLabels: false,
+              );
             },
           ),
         ],
