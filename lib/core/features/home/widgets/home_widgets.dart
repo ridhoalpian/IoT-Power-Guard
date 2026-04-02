@@ -43,14 +43,14 @@ class MetricsGrid extends StatelessWidget {
           childAspectRatio: aspectRatio,
           children: [
             MetricCard(
-              title: 'Tegangan',
+              title: 'Rata-Rata Tegangan',
               value: data.voltage.toStringAsFixed(1),
               unit: 'Volt',
               icon: Icons.electric_bolt,
               elevated: elevated,
             ),
             MetricCard(
-              title: 'Arus',
+              title: 'Total Arus',
               value: data.current.toStringAsFixed(2),
               unit: 'Ampere',
               icon: Icons.speed,

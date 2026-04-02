@@ -67,12 +67,12 @@ class _DashboardPageState extends State<DashboardPage>
                   totalConsumption: dashboard.totalConsumption,
                 ),
                 const SizedBox(height: 24),
-                // const SectionTitle(
-                //   title: 'Dashboard Monitoring Real-Time (Keseluruhan IoT)',
-                // ),
-                // const SizedBox(height: 12),
-                // MetricsGrid(data: dashboard.totalConsumption),
-                // const SizedBox(height: 24),
+                const SectionTitle(
+                  title: 'Parameter Listrik Real-Time',
+                ),
+                const SizedBox(height: 12),
+                MetricsGrid(data: dashboard.totalConsumption),
+                const SizedBox(height: 24),
                 const SectionTitle(title: 'Status Koneksi Perangkat'),
                 const SizedBox(height: 12),
                 DeviceStatusCard(snapshot: dashboard),

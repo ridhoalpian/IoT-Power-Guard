@@ -11,6 +11,33 @@ class ElectricalData {
   final double power;
   final double energy;
 
+  static ElectricalData aggregate(Iterable<ElectricalData> values) {
+    var count = 0;
+    var totalVoltage = 0.0;
+    var totalCurrent = 0.0;
+    var totalPower = 0.0;
+    var totalEnergy = 0.0;
+
+    for (final value in values) {
+      count++;
+      totalVoltage += value.voltage;
+      totalCurrent += value.current;
+      totalPower += value.power;
+      totalEnergy += value.energy;
+    }
+
+    if (count == 0) {
+      return empty();
+    }
+
+    return ElectricalData(
+      voltage: totalVoltage / count,
+      current: totalCurrent,
+      power: totalPower,
+      energy: totalEnergy,
+    );
+  }
+
   ElectricalData operator +(ElectricalData other) {
     return ElectricalData(
       voltage: voltage + other.voltage,

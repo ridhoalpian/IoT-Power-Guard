@@ -76,13 +76,13 @@ class FirebaseService {
     return _deviceRoot.onValue
         .map((event) {
           final map = _asMap(event.snapshot.value);
-          var total = ElectricalData.empty();
+          final readings = <ElectricalData>[];
           for (final value in map.values) {
             final deviceMap = _asMap(value);
             final monitoringMap = _asMap(deviceMap['monitoring']);
-            total += ElectricalData.fromMap(monitoringMap);
+            readings.add(ElectricalData.fromMap(monitoringMap));
           }
-          return total;
+          return ElectricalData.aggregate(readings);
         })
         .distinct(_electricalDataEquals);
   }
@@ -530,7 +530,7 @@ class FirebaseService {
 
     final now = DateTime.now();
     final resolvedDevices = <_ResolvedDashboardDevice>[];
-    var totalConsumption = ElectricalData.empty();
+    final totalReadings = <ElectricalData>[];
     DateTime? latestLastSeen;
 
     for (final entry in deviceStateById.entries) {
@@ -562,7 +562,7 @@ class FirebaseService {
           lastSeen: lastSeen,
         ),
       );
-      totalConsumption += monitoring;
+      totalReadings.add(monitoring);
       if (lastSeen != null &&
           (latestLastSeen == null || lastSeen.isAfter(latestLastSeen))) {
         latestLastSeen = lastSeen;
@@ -590,7 +590,7 @@ class FirebaseService {
 
     return DashboardSnapshot(
       rooms: rooms,
-      totalConsumption: totalConsumption,
+      totalConsumption: ElectricalData.aggregate(totalReadings),
       latestLastSeen: latestLastSeen,
     );
   }
