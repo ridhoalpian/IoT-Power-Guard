@@ -4,6 +4,7 @@ class NotificationService {
   NotificationService._();
 
   static final NotificationService instance = NotificationService._();
+  static const int _deviceOfflineNotificationId = 3;
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -56,6 +57,39 @@ class NotificationService {
       2,
       'Peringatan Konsumsi',
       'Status KNN menunjukkan WASPADA. Pantau konsumsi listrik Anda.',
+      details,
+    );
+  }
+
+  Future<void> showDeviceOfflineAlert(List<String> deviceNames) async {
+    if (deviceNames.isEmpty) {
+      return;
+    }
+
+    final sortedNames = List<String>.from(deviceNames)..sort();
+    final title =
+        sortedNames.length == 1
+            ? 'Perangkat Offline'
+            : '${sortedNames.length} Perangkat Offline';
+    final body =
+        sortedNames.length == 1
+            ? '${sortedNames.first} offline lebih dari 1 menit.'
+            : '${sortedNames.join(', ')} offline lebih dari 1 menit.';
+
+    const androidDetails = AndroidNotificationDetails(
+      'device_offline_channel',
+      'Status Perangkat',
+      channelDescription:
+          'Notifikasi saat perangkat offline lebih dari 1 menit',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: androidDetails);
+
+    await _plugin.show(
+      _deviceOfflineNotificationId,
+      title,
+      body,
       details,
     );
   }
