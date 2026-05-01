@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,6 +15,9 @@ class FirebaseService {
   FirebaseService._();
 
   static final FirebaseService instance = FirebaseService._();
+  static const Duration deviceOfflineThreshold = Duration(
+    milliseconds: _deviceOfflineThresholdMs,
+  );
 
   static const String _databaseUrl =
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -336,6 +340,20 @@ class FirebaseService {
 
   Future<void> setRelay(int relayNumber, bool isOn, String deviceId) {
     return _deviceRoot.child(deviceId).child('relay$relayNumber').set(isOn);
+  }
+
+  Future<void> saveNotificationToken(String token) {
+    final trimmedToken = token.trim();
+    if (trimmedToken.isEmpty) {
+      return Future.value();
+    }
+
+    final encodedToken = base64Url.encode(utf8.encode(trimmedToken));
+    return _root.child('notification_tokens').child(encodedToken).set({
+      'token': trimmedToken,
+      'updated_at': ServerValue.timestamp,
+      'platform': defaultTargetPlatform.name,
+    });
   }
 
   static Map<String, dynamic> _asMap(dynamic value) {

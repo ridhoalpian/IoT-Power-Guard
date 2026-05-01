@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../models/device_connection_summary.dart';
 import '../../services/firebase_service.dart';
 import '../../services/notification_service.dart';
 import 'pages/account_info_page.dart';
@@ -20,15 +19,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const int _onlineThresholdSeconds = 20;
-  static const Duration _offlineNotificationThreshold = Duration(minutes: 1);
 
   final FirebaseService _firebaseService = FirebaseService.instance;
   late final PageController _pageController;
   late final List<Widget> _pages;
   StreamSubscription<String>? _statusSubscription;
-  StreamSubscription<DeviceConnectionSummary>? _deviceConnectionSubscription;
   String? _lastStatus;
-  final Set<String> _notifiedOfflineDevices = <String>{};
   int _currentIndex = 0;
 
   static const List<String> _titles = [
@@ -60,11 +56,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _statusSubscription = _firebaseService.classificationStream.listen(
       _handleStatusUpdate,
     );
-    _deviceConnectionSubscription = _firebaseService
-        .deviceConnectionSummaryStream(
-          offlineThreshold: _offlineNotificationThreshold,
-        )
-        .listen(_handleDeviceConnectionUpdate);
   }
 
   void _handleStatusUpdate(String status) {
@@ -83,26 +74,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _lastStatus = normalized;
   }
 
-  void _handleDeviceConnectionUpdate(DeviceConnectionSummary summary) {
-    final offlineDevices = summary.offlineDeviceNames.toSet();
-    _notifiedOfflineDevices.removeWhere(
-      (deviceName) => !offlineDevices.contains(deviceName),
-    );
-
-    final newlyOfflineDevices =
-        offlineDevices.difference(_notifiedOfflineDevices).toList()..sort();
-    if (newlyOfflineDevices.isEmpty) {
-      return;
-    }
-
-    NotificationService.instance.showDeviceOfflineAlert(newlyOfflineDevices);
-    _notifiedOfflineDevices.addAll(newlyOfflineDevices);
-  }
-
   @override
   void dispose() {
     _statusSubscription?.cancel();
-    _deviceConnectionSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
   }

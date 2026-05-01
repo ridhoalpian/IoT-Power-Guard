@@ -5,6 +5,34 @@ class NotificationService {
 
   static final NotificationService instance = NotificationService._();
   static const int _deviceOfflineNotificationId = 3;
+  static const AndroidNotificationChannel _borosChannel =
+      AndroidNotificationChannel(
+        'boros_channel',
+        'Peringatan Konsumsi',
+        description: 'Notifikasi saat status Boros terdeteksi',
+        importance: Importance.max,
+      );
+  static const AndroidNotificationChannel _waspadaChannel =
+      AndroidNotificationChannel(
+        'waspada_channel',
+        'Peringatan Konsumsi',
+        description: 'Notifikasi saat status Waspada terdeteksi',
+        importance: Importance.high,
+      );
+  static const AndroidNotificationChannel _deviceOfflineChannel =
+      AndroidNotificationChannel(
+        'device_offline_channel',
+        'Status Perangkat',
+        description: 'Notifikasi saat perangkat dalam keadaan offline',
+        importance: Importance.max,
+      );
+  static const AndroidNotificationChannel _remoteAlertChannel =
+      AndroidNotificationChannel(
+        'remote_alert_channel',
+        'Remote Alerts',
+        description: 'Notifikasi dari Firebase Cloud Messaging',
+        importance: Importance.max,
+      );
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -14,13 +42,22 @@ class NotificationService {
     if (_initialized) {
       return;
     }
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
 
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
     await androidPlugin?.requestNotificationsPermission();
+    await androidPlugin?.createNotificationChannel(_borosChannel);
+    await androidPlugin?.createNotificationChannel(_waspadaChannel);
+    await androidPlugin?.createNotificationChannel(_deviceOfflineChannel);
+    await androidPlugin?.createNotificationChannel(_remoteAlertChannel);
 
     _initialized = true;
   }
@@ -73,24 +110,39 @@ class NotificationService {
             : '${sortedNames.length} Perangkat Offline';
     final body =
         sortedNames.length == 1
-            ? '${sortedNames.first} offline lebih dari 1 menit.'
-            : '${sortedNames.join(', ')} offline lebih dari 1 menit.';
+            ? '${sortedNames.first} dalam keadaan offline.'
+            : '${sortedNames.join(', ')} dalam keadaan offline.';
 
     const androidDetails = AndroidNotificationDetails(
       'device_offline_channel',
       'Status Perangkat',
-      channelDescription:
-          'Notifikasi saat perangkat offline lebih dari 1 menit',
+      channelDescription: 'Notifikasi saat perangkat dalam keadaan offline',
       importance: Importance.max,
       priority: Priority.high,
     );
     const details = NotificationDetails(android: androidDetails);
 
-    await _plugin.show(
-      _deviceOfflineNotificationId,
-      title,
-      body,
-      details,
+    await _plugin.show(_deviceOfflineNotificationId, title, body, details);
+  }
+
+  Future<void> clearDeviceOfflineAlert() async {
+    await _plugin.cancel(_deviceOfflineNotificationId);
+  }
+
+  Future<void> showRemoteAlert({
+    required String title,
+    required String body,
+    int id = 4,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'remote_alert_channel',
+      'Remote Alerts',
+      channelDescription: 'Notifikasi dari Firebase Cloud Messaging',
+      importance: Importance.max,
+      priority: Priority.high,
     );
+    const details = NotificationDetails(android: androidDetails);
+
+    await _plugin.show(id, title, body, details);
   }
 }
