@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../home/home_screen.dart';
+import '../../services/device_offline_notification_service.dart';
+import '../../services/push_notification_service.dart';
+import 'auth_service.dart';
 import 'biometric_auth_service.dart';
+import 'create_account_screen.dart';
+import 'forgot_password_screen.dart';
 
 class PinGateScreen extends StatefulWidget {
   const PinGateScreen({super.key});
@@ -12,16 +16,18 @@ class PinGateScreen extends StatefulWidget {
 }
 
 class _PinGateScreenState extends State<PinGateScreen> {
-  static const String _pin = '1234';
-
-  final TextEditingController _controller = TextEditingController();
-  final FocusNode _pinFocusNode = FocusNode();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _usernameFocusNode = FocusNode();
+  final AuthService _authService = AuthService();
   final BiometricAuthService _biometricAuthService = BiometricAuthService();
 
   bool _isSubmitting = false;
+  bool _isGoogleSubmitting = false;
   bool _isBiometricLoading = false;
   bool _isCheckingBiometricAvailability = true;
   bool _isBiometricAvailable = false;
+  bool _obscurePassword = true;
   String? _error;
 
   @override
@@ -34,13 +40,16 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
   @override
   void dispose() {
-    _controller.dispose();
-    _pinFocusNode.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _usernameFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _initializeBiometricAuth() async {
-    final isAvailable = await _biometricAuthService.isBiometricAvailable();
+    final hasSession = _authService.hasAuthenticatedSession;
+    final isAvailable =
+        hasSession && await _biometricAuthService.isBiometricAvailable();
     if (!mounted) return;
 
     setState(() {
@@ -53,11 +62,11 @@ class _PinGateScreenState extends State<PinGateScreen> {
       return;
     }
 
-    _focusPinField();
+    _focusUsernameField();
   }
 
   Future<void> _submit() async {
-    if (_isSubmitting || _isBiometricLoading) {
+    if (_isBusy) {
       return;
     }
 
@@ -66,23 +75,68 @@ class _PinGateScreenState extends State<PinGateScreen> {
       _error = null;
     });
 
-    final input = _controller.text.trim();
-    if (input != _pin) {
+    try {
+      await _authService.signInWithUsernameAndPassword(
+        username: _usernameController.text,
+        password: _passwordController.text,
+      );
+      await _goToHomePage();
+    } on AuthFailure catch (error) {
+      if (!mounted) return;
       setState(() {
-        _isSubmitting = false;
-        _error = 'PIN salah. Coba lagi.';
+        _error = error.message;
       });
-      _focusPinField();
+      _focusUsernameField();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitGoogle() async {
+    if (_isBusy) {
       return;
     }
 
-    _goToHomePage();
+    setState(() {
+      _isGoogleSubmitting = true;
+      _error = null;
+    });
+
+    try {
+      await _authService.signInWithGoogle();
+      await _goToHomePage();
+    } on AuthFailure catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleSubmitting = false;
+        });
+      }
+    }
   }
 
   Future<void> _authenticateWithBiometric({
     bool isAutoTriggered = false,
   }) async {
-    if (_isSubmitting || _isBiometricLoading) {
+    if (_isBusy) {
+      return;
+    }
+
+    if (!_authService.hasAuthenticatedSession) {
+      if (!isAutoTriggered) {
+        _showSnackbar(
+          'Login dengan username/password atau Google terlebih dahulu.',
+        );
+      }
+      _focusUsernameField();
       return;
     }
 
@@ -103,37 +157,43 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
     switch (result.status) {
       case BiometricAuthStatus.success:
-        _goToHomePage();
+        await _goToHomePage();
         return;
       case BiometricAuthStatus.unavailable:
         if (!isAutoTriggered) {
           _showSnackbar('Biometrik tidak tersedia di perangkat ini.');
         }
-        _focusPinField();
+        _focusUsernameField();
         return;
       case BiometricAuthStatus.canceled:
-        _focusPinField();
+        _focusUsernameField();
         return;
       case BiometricAuthStatus.error:
         _showSnackbar(
           result.message ?? 'Autentikasi biometrik gagal dijalankan.',
         );
-        _focusPinField();
+        _focusUsernameField();
         return;
     }
   }
 
-  void _goToHomePage() {
+  Future<void> _goToHomePage() async {
+    if (!mounted) return;
+    await DeviceOfflineNotificationService.instance.initialize();
+    await PushNotificationService.instance.initialize();
     if (!mounted) return;
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
-  void _focusPinField() {
+  void _focusUsernameField() {
     if (!mounted) return;
-    FocusScope.of(context).requestFocus(_pinFocusNode);
+    FocusScope.of(context).requestFocus(_usernameFocusNode);
   }
+
+  bool get _isBusy =>
+      _isSubmitting || _isGoogleSubmitting || _isBiometricLoading;
 
   void _showSnackbar(String message) {
     if (!mounted) return;
@@ -148,129 +208,229 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.lock_outline, size: 56, color: accent),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Masukkan PIN',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Masukkan 4 digit PIN untuk masuk.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _controller,
-                      focusNode: _pinFocusNode,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      maxLength: 4,
-                      enabled: !_isBiometricLoading,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        counterText: '',
-                        hintText: '****',
-                        errorText: _error,
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 48,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.lock_outline,
+                          size: 56,
+                          color: accent,
                         ),
                       ),
-                      onSubmitted: (_) => _submit(),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed:
-                            (_isSubmitting || _isBiometricLoading)
-                                ? null
-                                : _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          textStyle: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Masuk ke HETrack',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Gunakan username, password, atau akun Google.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _usernameController,
+                        focusNode: _usernameFocusNode,
+                        keyboardType: TextInputType.text,
+                        textInputAction: TextInputAction.next,
+                        enabled: !_isBusy,
+                        decoration: InputDecoration(
+                          hintText: 'Username atau email',
+                          prefixIcon: const Icon(Icons.person_outline),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
                         ),
-                        child: Text(_isSubmitting ? 'Memeriksa...' : 'Masuk'),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            (_isSubmitting ||
-                                    _isBiometricLoading ||
-                                    _isCheckingBiometricAvailability)
-                                ? null
-                                : () => _authenticateWithBiometric(),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: accent,
-                          side: BorderSide(
-                            color:
-                                _isBiometricAvailable
-                                    ? accent
-                                    : const Color(0xFFCBD5E1),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        enabled: !_isBusy,
+                        decoration: InputDecoration(
+                          hintText: 'Password',
+                          errorText: _error,
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            onPressed:
+                                _isBusy
+                                    ? null
+                                    : () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          textStyle: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
                         ),
-                        icon:
-                            _isCheckingBiometricAvailability
-                                ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Icon(Icons.fingerprint_outlined),
-                        label: const Text('Gunakan Sidik Jari'),
+                        onSubmitted: (_) => _submit(),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed:
+                                _isBusy
+                                    ? null
+                                    : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) =>
+                                                  const CreateAccountScreen(),
+                                        ),
+                                      );
+                                    },
+                            child: const Text('Buat akun'),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed:
+                                _isBusy
+                                    ? null
+                                    : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) =>
+                                                  const ForgotPasswordScreen(),
+                                        ),
+                                      );
+                                    },
+                            child: const Text('Lupa password?'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isBusy ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          child: Text(_isSubmitting ? 'Memeriksa...' : 'Masuk'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isBusy ? null : _submitGoogle,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF111827),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            backgroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          icon:
+                              _isGoogleSubmitting
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.account_circle_outlined),
+                          label: const Text('Masuk dengan Google'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              (_isBusy || _isCheckingBiometricAvailability)
+                                  ? null
+                                  : () => _authenticateWithBiometric(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: accent,
+                            side: BorderSide(
+                              color:
+                                  _isBiometricAvailable
+                                      ? accent
+                                      : const Color(0xFFCBD5E1),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          icon:
+                              _isCheckingBiometricAvailability
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.fingerprint_outlined),
+                          label: const Text('Gunakan Sidik Jari'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
@@ -28,8 +27,6 @@ class FirebaseService {
   static const int _epochSecondsThreshold = 1000000000;
   static const int _uint32Mod = 4294967296;
   static const int _maxReasonableLastSeenDriftMs = 31536000000;
-  static const String _userEmail = 'ridhoalpian8713@gmail.com';
-  static const String _userPassword = 'ridho8733';
   static const double _lowConsumptionThresholdWatts = 150;
   static const double _mediumConsumptionThresholdWatts = 400;
   static const List<_DashboardRoomConfig> _dashboardRoomConfigs = [
@@ -54,7 +51,6 @@ class FirebaseService {
     ),
   ];
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   late final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
     app: Firebase.app(),
     databaseURL: _databaseUrl,
@@ -62,19 +58,7 @@ class FirebaseService {
   late final DatabaseReference _root = _database.ref(_iotRootPath);
   late final DatabaseReference _deviceRoot = _database.ref('device');
 
-  Future<void> initialize() async {
-    if (_auth.currentUser != null) {
-      return;
-    }
-    try {
-      await _auth.signInWithEmailAndPassword(
-        email: _userEmail,
-        password: _userPassword,
-      );
-    } on FirebaseAuthException catch (error) {
-      debugPrint('Firebase auth failed: ${error.code}');
-    }
-  }
+  Future<void> initialize() async {}
 
   Stream<ElectricalData> get electricalDataStream {
     return _deviceRoot.onValue

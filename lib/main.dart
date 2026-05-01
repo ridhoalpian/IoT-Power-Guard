@@ -2,18 +2,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'core/features/splash/splash_screen.dart';
-import 'core/services/device_offline_notification_service.dart';
 import 'core/services/firebase_service.dart';
 import 'core/services/notification_service.dart';
-import 'core/services/push_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await FirebaseService.instance.initialize();
   await NotificationService.instance.initialize();
-  await DeviceOfflineNotificationService.instance.initialize();
-  await PushNotificationService.instance.initialize();
   runApp(const MyApp());
 }
 

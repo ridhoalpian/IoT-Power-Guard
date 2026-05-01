@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import '../auth/pin_gate_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({super.key, this.delay = _defaultDelay, this.nextBuilder});
+
+  static const Duration _defaultDelay = Duration(seconds: 2);
+
+  final Duration delay;
+  final WidgetBuilder? nextBuilder;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  static const Duration _delay = Duration(seconds: 2);
-
   @override
   void initState() {
     super.initState();
@@ -19,10 +22,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _goNext() async {
-    await Future.delayed(_delay);
+    await Future.delayed(widget.delay);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const PinGateScreen()),
+      MaterialPageRoute(
+        builder: widget.nextBuilder ?? (_) => const PinGateScreen(),
+      ),
     );
   }
 
