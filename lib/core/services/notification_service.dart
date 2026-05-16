@@ -43,7 +43,7 @@ class NotificationService {
       return;
     }
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
+      '@mipmap/launcher_icon',
     );
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
