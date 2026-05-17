@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'widgets/auth_message_dialog.dart';
 
 enum _ForgotPasswordStep { identity, emailSent }
 
@@ -18,7 +19,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   _ForgotPasswordStep _step = _ForgotPasswordStep.identity;
   bool _isSubmitting = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -34,7 +34,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() {
       _isSubmitting = true;
-      _error = null;
     });
 
     try {
@@ -48,9 +47,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       });
     } on AuthFailure catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
+      await _showResetPasswordFailedDialog(error.message);
+    } catch (error) {
+      if (!mounted) return;
+      debugPrint('Reset password failed: $error');
+      await _showResetPasswordFailedDialog(
+        'Link reset gagal dikirim. Periksa kembali data Anda lalu coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -143,7 +146,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               decoration: _inputDecoration(
                 hintText: 'Username',
                 icon: Icons.person_outline,
-                errorText: _error,
               ),
               onSubmitted: (_) => _sendResetEmail(),
             ),
@@ -207,12 +209,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   InputDecoration _inputDecoration({
     required String hintText,
     required IconData icon,
-    String? errorText,
     Widget? suffixIcon,
   }) {
     return InputDecoration(
       hintText: hintText,
-      errorText: errorText,
       prefixIcon: Icon(icon),
       suffixIcon: suffixIcon,
       filled: true,
@@ -221,6 +221,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
+    );
+  }
+
+  Future<void> _showResetPasswordFailedDialog(String message) async {
+    if (!mounted) return;
+    await showAuthMessageDialog(
+      context: context,
+      title: 'Reset password gagal',
+      message: message,
+      icon: Icons.mark_email_unread_outlined,
     );
   }
 
