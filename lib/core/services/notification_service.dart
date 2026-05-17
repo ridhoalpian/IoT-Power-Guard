@@ -75,7 +75,7 @@ class NotificationService {
     await _plugin.show(
       1,
       'Peringatan Konsumsi Tinggi',
-      'Status KNN menunjukkan BOROS. Periksa beban listrik Anda.',
+      'Status konsumsi listrik anda pada level BOROS. Silahkan periksa beban listrik Anda.',
       details,
     );
   }
@@ -93,7 +93,7 @@ class NotificationService {
     await _plugin.show(
       2,
       'Peringatan Konsumsi',
-      'Status KNN menunjukkan WASPADA. Pantau konsumsi listrik Anda.',
+      'Status konsumsi listrik anda pada level WASPADA. Pantau konsumsi listrik Anda.',
       details,
     );
   }
