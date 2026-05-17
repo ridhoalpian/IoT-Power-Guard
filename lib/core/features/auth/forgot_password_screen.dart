@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
 
-enum _ForgotPasswordStep { identity, code, newPassword, done }
+enum _ForgotPasswordStep { identity, emailSent }
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -14,22 +14,16 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
 
   _ForgotPasswordStep _step = _ForgotPasswordStep.identity;
   bool _isSubmitting = false;
-  bool _obscurePassword = true;
-  String? _verifiedEmail;
   String? _error;
 
   @override
   void dispose() {
     _emailController.dispose();
     _usernameController.dispose();
-    _codeController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -50,73 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _step = _ForgotPasswordStep.code;
-      });
-    } on AuthFailure catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _verifyCode() async {
-    if (_isSubmitting) {
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _error = null;
-    });
-
-    try {
-      final email = await _authService.verifyPasswordResetCode(
-        _codeController.text,
-      );
-      if (!mounted) return;
-      setState(() {
-        _verifiedEmail = email;
-        _step = _ForgotPasswordStep.newPassword;
-      });
-    } on AuthFailure catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveNewPassword() async {
-    if (_isSubmitting) {
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _error = null;
-    });
-
-    try {
-      await _authService.confirmPasswordReset(
-        code: _codeController.text,
-        newPassword: _passwordController.text,
-      );
-      if (!mounted) return;
-      setState(() {
-        _step = _ForgotPasswordStep.done;
+        _step = _ForgotPasswordStep.emailSent;
       });
     } on AuthFailure catch (error) {
       if (!mounted) return;
@@ -221,94 +149,31 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 16),
             _primaryButton(
-              label: _isSubmitting ? 'Memeriksa...' : 'Kirim Kode',
+              label: _isSubmitting ? 'Memeriksa...' : 'Kirim Link Reset',
               onPressed: _isSubmitting ? null : _sendResetEmail,
             ),
           ],
         );
-      case _ForgotPasswordStep.code:
+      case _ForgotPasswordStep.emailSent:
         return Column(
           children: [
-            TextField(
-              controller: _codeController,
-              textInputAction: TextInputAction.done,
-              enabled: !_isSubmitting,
-              decoration: _inputDecoration(
-                hintText: 'Kode reset dari email',
-                icon: Icons.key_outlined,
-                errorText: _error,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-              onSubmitted: (_) => _verifyCode(),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Buka email reset dari Firebase, salin nilai oobCode dari link, lalu tempel di sini.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
-            const SizedBox(height: 16),
-            _primaryButton(
-              label: _isSubmitting ? 'Memverifikasi...' : 'Verifikasi Kode',
-              onPressed: _isSubmitting ? null : _verifyCode,
-            ),
-          ],
-        );
-      case _ForgotPasswordStep.newPassword:
-        return Column(
-          children: [
-            if (_verifiedEmail != null) ...[
-              Text(
-                _verifiedEmail!,
+              child: const Text(
+                'Link reset password sudah dikirim. Buka email dari Firebase, lalu ikuti tautan reset password. Jika tidak muncul di Inbox, periksa folder Spam atau Promotions.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0A7A6F),
+                  height: 1.45,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF6B7280),
                 ),
               ),
-              const SizedBox(height: 14),
-            ],
-            TextField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              textInputAction: TextInputAction.done,
-              enabled: !_isSubmitting,
-              decoration: _inputDecoration(
-                hintText: 'Password baru',
-                icon: Icons.lock_outline,
-                errorText: _error,
-                suffixIcon: IconButton(
-                  onPressed:
-                      _isSubmitting
-                          ? null
-                          : () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                ),
-              ),
-              onSubmitted: (_) => _saveNewPassword(),
-            ),
-            const SizedBox(height: 16),
-            _primaryButton(
-              label: _isSubmitting ? 'Menyimpan...' : 'Simpan Password Baru',
-              onPressed: _isSubmitting ? null : _saveNewPassword,
-            ),
-          ],
-        );
-      case _ForgotPasswordStep.done:
-        return Column(
-          children: [
-            const Icon(
-              Icons.check_circle_outline,
-              size: 52,
-              color: Color(0xFF0A7A6F),
             ),
             const SizedBox(height: 16),
             _primaryButton(
@@ -363,12 +228,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     switch (_step) {
       case _ForgotPasswordStep.identity:
         return Icons.manage_accounts_outlined;
-      case _ForgotPasswordStep.code:
+      case _ForgotPasswordStep.emailSent:
         return Icons.mark_email_read_outlined;
-      case _ForgotPasswordStep.newPassword:
-        return Icons.lock_reset_outlined;
-      case _ForgotPasswordStep.done:
-        return Icons.check_circle_outline;
     }
   }
 
@@ -376,12 +237,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     switch (_step) {
       case _ForgotPasswordStep.identity:
         return 'Verifikasi Akun';
-      case _ForgotPasswordStep.code:
-        return 'Masukkan Kode Reset';
-      case _ForgotPasswordStep.newPassword:
-        return 'Password Baru';
-      case _ForgotPasswordStep.done:
-        return 'Password Berhasil Diubah';
+      case _ForgotPasswordStep.emailSent:
+        return 'Cek Email Anda';
     }
   }
 
@@ -389,12 +246,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     switch (_step) {
       case _ForgotPasswordStep.identity:
         return 'Masukkan email dan username yang terdaftar.';
-      case _ForgotPasswordStep.code:
-        return 'Kode dikirim lewat email reset password Firebase.';
-      case _ForgotPasswordStep.newPassword:
-        return 'Masukkan password baru untuk akun ini.';
-      case _ForgotPasswordStep.done:
-        return 'Silakan login ulang dengan password baru.';
+      case _ForgotPasswordStep.emailSent:
+        return 'Gunakan link reset password yang dikirim oleh Firebase.';
     }
   }
 }
