@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/device_offline_notification_service.dart';
 import '../../services/push_notification_service.dart';
-import '../home/home_screen.dart';
 import 'auth_service.dart';
+import 'pin_gate_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -50,7 +50,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       await PushNotificationService.instance.initialize();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const PinGateScreen()),
         (_) => false,
       );
     } on AuthFailure catch (error) {
