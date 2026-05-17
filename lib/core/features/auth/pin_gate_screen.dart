@@ -28,7 +28,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
   bool _isCheckingBiometricAvailability = true;
   bool _isBiometricAvailable = false;
   bool _obscurePassword = true;
-  String? _error;
 
   @override
   void initState() {
@@ -72,7 +71,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
     setState(() {
       _isSubmitting = true;
-      _error = null;
     });
 
     try {
@@ -83,9 +81,13 @@ class _PinGateScreenState extends State<PinGateScreen> {
       await _goToHomePage();
     } on AuthFailure catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
+      await _showLoginFailedDialog(error.message);
+      _focusUsernameField();
+    } catch (error) {
+      if (!mounted) return;
+      const message = 'Email/username atau password tidak valid.';
+      debugPrint('Login failed: $error');
+      await _showLoginFailedDialog(message);
       _focusUsernameField();
     } finally {
       if (mounted) {
@@ -103,7 +105,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
     setState(() {
       _isGoogleSubmitting = true;
-      _error = null;
     });
 
     try {
@@ -111,9 +112,7 @@ class _PinGateScreenState extends State<PinGateScreen> {
       await _goToHomePage();
     } on AuthFailure catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
+      _showSnackbar(error.message);
     } finally {
       if (mounted) {
         setState(() {
@@ -142,7 +141,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
     setState(() {
       _isBiometricLoading = true;
-      _error = null;
     });
 
     final result = await _biometricAuthService.authenticate();
@@ -200,6 +198,85 @@ class _PinGateScreenState extends State<PinGateScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showLoginFailedDialog(String message) async {
+    if (!mounted) return;
+    const accent = Color(0xFF0A7A6F);
+    await showDialog<void>(
+      context: context,
+      builder:
+          (context) => Dialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEE2E2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.lock_person_outlined,
+                      color: Color(0xFFDC2626),
+                      size: 34,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Login gagal',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      child: const Text('Coba lagi'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
   }
 
   @override
@@ -281,7 +358,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
                         enabled: !_isBusy,
                         decoration: InputDecoration(
                           hintText: 'Password',
-                          errorText: _error,
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             onPressed:
