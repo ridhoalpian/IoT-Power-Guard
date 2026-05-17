@@ -7,6 +7,7 @@ import 'auth_service.dart';
 import 'biometric_auth_service.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_screen.dart';
+import 'widgets/auth_message_dialog.dart';
 
 class PinGateScreen extends StatefulWidget {
   const PinGateScreen({super.key});
@@ -202,80 +203,11 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
   Future<void> _showLoginFailedDialog(String message) async {
     if (!mounted) return;
-    const accent = Color(0xFF0A7A6F);
-    await showDialog<void>(
+    await showAuthMessageDialog(
       context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFEE2E2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.lock_person_outlined,
-                      color: Color(0xFFDC2626),
-                      size: 34,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Login gagal',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFF111827),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 13,
-                      height: 1.45,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      child: const Text('Coba lagi'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+      title: 'Login gagal',
+      message: message,
+      icon: Icons.lock_person_outlined,
     );
   }
 

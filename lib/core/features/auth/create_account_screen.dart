@@ -4,6 +4,7 @@ import '../../services/device_offline_notification_service.dart';
 import '../../services/push_notification_service.dart';
 import 'auth_service.dart';
 import 'pin_gate_screen.dart';
+import 'widgets/auth_message_dialog.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -20,7 +21,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   bool _isSubmitting = false;
   bool _obscurePassword = true;
-  String? _error;
 
   @override
   void dispose() {
@@ -37,7 +37,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     setState(() {
       _isSubmitting = true;
-      _error = null;
     });
 
     try {
@@ -55,9 +54,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       );
     } on AuthFailure catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = error.message;
-      });
+      await _showCreateAccountFailedDialog(
+        _createAccountFailureMessage(error.message),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      debugPrint('Create account failed: $error');
+      await _showCreateAccountFailedDialog(
+        'Akun gagal dibuat. Periksa kembali data Anda lalu coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -149,7 +154,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       decoration: _inputDecoration(
                         hintText: 'Password',
                         icon: Icons.lock_outline,
-                        errorText: _error,
                         suffixIcon: IconButton(
                           onPressed:
                               _isSubmitting
@@ -200,12 +204,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   InputDecoration _inputDecoration({
     required String hintText,
     required IconData icon,
-    String? errorText,
     Widget? suffixIcon,
   }) {
     return InputDecoration(
       hintText: hintText,
-      errorText: errorText,
       prefixIcon: Icon(icon),
       suffixIcon: suffixIcon,
       filled: true,
@@ -215,5 +217,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         borderSide: BorderSide.none,
       ),
     );
+  }
+
+  Future<void> _showCreateAccountFailedDialog(String message) async {
+    if (!mounted) return;
+    await showAuthMessageDialog(
+      context: context,
+      title: 'Akun gagal dibuat',
+      message: message,
+      icon: Icons.person_off_outlined,
+    );
+  }
+
+  String _createAccountFailureMessage(String message) {
+    if (message == 'Email ini sudah terdaftar.' ||
+        message == 'Username sudah dipakai.') {
+      return 'Pendaftaran gagal. Gunakan data akun yang valid atau coba login jika sudah memiliki akun.';
+    }
+
+    return message;
   }
 }
