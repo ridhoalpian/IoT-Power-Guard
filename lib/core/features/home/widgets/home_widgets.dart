@@ -263,12 +263,20 @@ class DeviceClassificationCard extends StatelessWidget {
 }
 
 class TotalConsumptionCard extends StatelessWidget {
-  const TotalConsumptionCard({super.key, required this.totalConsumption});
+  const TotalConsumptionCard({
+    super.key,
+    required this.totalConsumption,
+    this.onResetEnergy,
+  });
+
+  static const double _plnTariffPerKwh = 1352;
 
   final ElectricalData totalConsumption;
+  final VoidCallback? onResetEnergy;
 
   @override
   Widget build(BuildContext context) {
+    final estimatedCost = totalConsumption.energy * _plnTariffPerKwh;
     return _DashboardSurfaceCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -335,11 +343,104 @@ class TotalConsumptionCard extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDFA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF99F6E4)),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 420;
+                  final costInfo = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Estimasi Biaya Listrik',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF0F766E),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _formatRupiah(estimatedCost),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          color: Color(0xFF0F766E),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${totalConsumption.energy.toStringAsFixed(3)} kWh x Rp1.352/kWh',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  );
+                  final resetButton = OutlinedButton.icon(
+                    onPressed: onResetEnergy,
+                    icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                    label: const Text('Reset Energi'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0F766E),
+                      side: const BorderSide(color: Color(0xFF0F766E)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+
+                  if (isWide) {
+                    return Row(
+                      children: [
+                        Expanded(child: costInfo),
+                        const SizedBox(width: 12),
+                        resetButton,
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      costInfo,
+                      const SizedBox(height: 12),
+                      SizedBox(width: double.infinity, child: resetButton),
+                    ],
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+String _formatRupiah(double value) {
+  final rounded = value.round().toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < rounded.length; index++) {
+    final remaining = rounded.length - index;
+    buffer.write(rounded[index]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+  return 'Rp$buffer';
 }
 
 class DeviceStatusCard extends StatelessWidget {
@@ -511,6 +612,7 @@ class ConnectionStatusCard extends StatelessWidget {
     final rooms = [
       RoomDashboardData(
         roomName: 'Dapur',
+        deviceName: null,
         deviceId: null,
         monitoring: ElectricalData.empty(),
         classification: ConsumptionLevel.low,
@@ -522,6 +624,7 @@ class ConnectionStatusCard extends StatelessWidget {
       ),
       RoomDashboardData(
         roomName: 'Kamar',
+        deviceName: null,
         deviceId: null,
         monitoring: ElectricalData.empty(),
         classification: ConsumptionLevel.low,
@@ -533,6 +636,7 @@ class ConnectionStatusCard extends StatelessWidget {
       ),
       RoomDashboardData(
         roomName: 'Ruang Tengah',
+        deviceName: null,
         deviceId: null,
         monitoring: ElectricalData.empty(),
         classification: ConsumptionLevel.low,
@@ -799,7 +903,7 @@ class _DeviceStatusRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              room.roomName,
+              room.deviceName ?? room.roomName,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,

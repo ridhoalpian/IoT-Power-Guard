@@ -18,6 +18,7 @@ extension ConsumptionLevelX on ConsumptionLevel {
 class RoomDashboardData {
   const RoomDashboardData({
     required this.roomName,
+    required this.deviceName,
     required this.deviceId,
     required this.monitoring,
     required this.classification,
@@ -29,6 +30,7 @@ class RoomDashboardData {
   });
 
   final String roomName;
+  final String? deviceName;
   final String? deviceId;
   final ElectricalData monitoring;
   final ConsumptionLevel classification;
@@ -41,6 +43,7 @@ class RoomDashboardData {
   factory RoomDashboardData.placeholder(String roomName) {
     return RoomDashboardData(
       roomName: roomName,
+      deviceName: null,
       deviceId: null,
       monitoring: ElectricalData.empty(),
       classification: ConsumptionLevel.low,

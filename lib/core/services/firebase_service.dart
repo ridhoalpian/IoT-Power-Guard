@@ -380,6 +380,21 @@ class FirebaseService {
     return _deviceRoot.child(deviceId).child('relay$relayNumber').set(isOn);
   }
 
+  Future<void> resetEnergyConsumption(Iterable<String> deviceIds) {
+    final updates = <String, Object>{};
+    for (final deviceId in deviceIds) {
+      final trimmedDeviceId = deviceId.trim();
+      if (trimmedDeviceId.isEmpty) {
+        continue;
+      }
+      updates['$trimmedDeviceId/monitoring/energy'] = 0;
+    }
+    if (updates.isEmpty) {
+      return Future.value();
+    }
+    return _deviceRoot.update(updates);
+  }
+
   Future<void> saveNotificationToken(String token) {
     final trimmedToken = token.trim();
     if (trimmedToken.isEmpty) {
@@ -529,6 +544,7 @@ class FirebaseService {
       final prevRoom = previous.rooms[index];
       final nextRoom = next.rooms[index];
       if (prevRoom.roomName != nextRoom.roomName ||
+          prevRoom.deviceName != nextRoom.deviceName ||
           prevRoom.deviceId != nextRoom.deviceId ||
           prevRoom.classification != nextRoom.classification ||
           prevRoom.prediction != nextRoom.prediction ||
@@ -663,6 +679,7 @@ class FirebaseService {
               prediction?.key == predictionKey ? prediction?.prediction : null;
           return RoomDashboardData(
             roomName: config.label,
+            deviceName: assignedDevice.name,
             deviceId: assignedDevice.deviceId,
             monitoring: assignedDevice.monitoring,
             classification:

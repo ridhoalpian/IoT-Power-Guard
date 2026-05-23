@@ -55,7 +55,13 @@ class _DashboardPageState extends State<DashboardPage>
             const SizedBox(height: 24),
             const SectionTitle(title: 'Total Konsumsi Rumah'),
             const SizedBox(height: 12),
-            TotalConsumptionCard(totalConsumption: dashboard.totalConsumption),
+            TotalConsumptionCard(
+              totalConsumption: dashboard.totalConsumption,
+              onResetEnergy:
+                  dashboard.hasAssignedDevices
+                      ? () => _confirmAndResetEnergy(dashboard)
+                      : null,
+            ),
             const SizedBox(height: 24),
             const SectionTitle(title: 'Parameter Listrik Real-Time'),
             const SizedBox(height: 12),
@@ -71,6 +77,70 @@ class _DashboardPageState extends State<DashboardPage>
         );
       },
     );
+  }
+
+  Future<void> _confirmAndResetEnergy(DashboardSnapshot dashboard) async {
+    final deviceIds = dashboard.rooms
+        .map((room) => room.deviceId)
+        .whereType<String>()
+        .toList(growable: false);
+    if (deviceIds.isEmpty) {
+      return;
+    }
+
+    final shouldReset = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset Energi?'),
+          content: const Text(
+            'Nilai energy pada perangkat yang terpasang akan diatur menjadi 0. Estimasi biaya ikut kembali dari awal.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldReset != true || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.firebaseService.resetEnergyConsumption(deviceIds);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Data energy dan estimasi biaya berhasil direset.'),
+          ),
+        );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFDC2626),
+            content: Text('Gagal reset energy: $error'),
+          ),
+        );
+    }
   }
 
   void _handleClassificationChange(DashboardSnapshot dashboard) {
