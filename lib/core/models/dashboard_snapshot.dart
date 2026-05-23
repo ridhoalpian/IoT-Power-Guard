@@ -6,11 +6,11 @@ extension ConsumptionLevelX on ConsumptionLevel {
   String get label {
     switch (this) {
       case ConsumptionLevel.low:
-        return 'LOW';
+        return 'Normal';
       case ConsumptionLevel.medium:
-        return 'MEDIUM';
+        return 'Waspada';
       case ConsumptionLevel.high:
-        return 'HIGH';
+        return 'Boros';
     }
   }
 }
@@ -21,6 +21,8 @@ class RoomDashboardData {
     required this.deviceId,
     required this.monitoring,
     required this.classification,
+    this.prediction,
+    this.probabilities = const {},
     required this.isOnline,
     required this.lastSeen,
     required this.hasAssignedDevice,
@@ -30,6 +32,8 @@ class RoomDashboardData {
   final String? deviceId;
   final ElectricalData monitoring;
   final ConsumptionLevel classification;
+  final String? prediction;
+  final Map<String, double> probabilities;
   final bool isOnline;
   final DateTime? lastSeen;
   final bool hasAssignedDevice;
@@ -40,6 +44,8 @@ class RoomDashboardData {
       deviceId: null,
       monitoring: ElectricalData.empty(),
       classification: ConsumptionLevel.low,
+      prediction: null,
+      probabilities: const {},
       isOnline: false,
       lastSeen: null,
       hasAssignedDevice: false,
@@ -74,6 +80,16 @@ class DashboardSnapshot {
     return rooms
         .where((room) => room.classification == ConsumptionLevel.high)
         .toList(growable: false);
+  }
+
+  String get globalClassificationLabel {
+    if (rooms.any((room) => room.classification == ConsumptionLevel.high)) {
+      return ConsumptionLevel.high.label;
+    }
+    if (rooms.any((room) => room.classification == ConsumptionLevel.medium)) {
+      return ConsumptionLevel.medium.label;
+    }
+    return ConsumptionLevel.low.label;
   }
 
   factory DashboardSnapshot.empty() {

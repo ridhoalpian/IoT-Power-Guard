@@ -649,6 +649,8 @@ class _ClassificationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = _consumptionTone(room.classification);
+    final probability = room.probabilities[room.prediction];
+    final label = room.prediction ?? room.classification.label;
     return Row(
       children: [
         Container(
@@ -662,16 +664,31 @@ class _ClassificationRow extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            room.roomName,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                room.roomName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              if (probability != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Probabilitas ${(probability * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        _StatusChip(label: room.classification.label, color: tone.color),
+        _StatusChip(label: label, color: tone.color),
       ],
     );
   }

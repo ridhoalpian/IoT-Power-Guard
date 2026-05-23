@@ -4,12 +4,14 @@ class ElectricalData {
     required this.current,
     required this.power,
     required this.energy,
+    required this.duration,
   });
 
   final double voltage;
   final double current;
   final double power;
   final double energy;
+  final double duration;
 
   static ElectricalData aggregate(Iterable<ElectricalData> values) {
     var count = 0;
@@ -17,6 +19,7 @@ class ElectricalData {
     var totalCurrent = 0.0;
     var totalPower = 0.0;
     var totalEnergy = 0.0;
+    var totalDuration = 0.0;
 
     for (final value in values) {
       count++;
@@ -24,6 +27,7 @@ class ElectricalData {
       totalCurrent += value.current;
       totalPower += value.power;
       totalEnergy += value.energy;
+      totalDuration += value.duration;
     }
 
     if (count == 0) {
@@ -35,6 +39,7 @@ class ElectricalData {
       current: totalCurrent,
       power: totalPower,
       energy: totalEnergy,
+      duration: totalDuration / count,
     );
   }
 
@@ -44,6 +49,7 @@ class ElectricalData {
       current: current + other.current,
       power: power + other.power,
       energy: energy + other.energy,
+      duration: duration + other.duration,
     );
   }
 
@@ -53,11 +59,18 @@ class ElectricalData {
       current: _toDouble(map['current']),
       power: _toDouble(map['power']),
       energy: _toDouble(map['energy']),
+      duration: _toDouble(map['duration']),
     );
   }
 
   static ElectricalData empty() {
-    return const ElectricalData(voltage: 0, current: 0, power: 0, energy: 0);
+    return const ElectricalData(
+      voltage: 0,
+      current: 0,
+      power: 0,
+      energy: 0,
+      duration: 0,
+    );
   }
 
   static double _toDouble(dynamic value) {

@@ -21,13 +21,13 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage>
     with AutomaticKeepAliveClientMixin<DashboardPage> {
-  late final Stream<String> _classificationStream;
   late final Stream<DashboardSnapshot> _dashboardSnapshotStream;
+  String? _lastHandledClassification;
+  bool _isBorosRecommendationOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _classificationStream = widget.firebaseService.classificationStream;
     _dashboardSnapshotStream = widget.firebaseService.dashboardSnapshotStream(
       offlineThreshold: Duration(seconds: widget.onlineThresholdSeconds),
     );
@@ -36,75 +36,71 @@ class _DashboardPageState extends State<DashboardPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return StreamBuilder<String>(
-      stream: _classificationStream,
-      builder: (context, classificationSnapshot) {
-        final globalStatus = classificationSnapshot.data ?? 'Normal';
-        return StreamBuilder<DashboardSnapshot>(
-          stream: _dashboardSnapshotStream,
-          builder: (context, dashboardSnapshot) {
-            final dashboard =
-                dashboardSnapshot.data ?? DashboardSnapshot.empty();
-            final highRooms = dashboard.highConsumptionRooms;
+    return StreamBuilder<DashboardSnapshot>(
+      stream: _dashboardSnapshotStream,
+      builder: (context, dashboardSnapshot) {
+        final dashboard = dashboardSnapshot.data ?? DashboardSnapshot.empty();
+        _handleClassificationChange(dashboard);
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              children: [
-                const SectionTitle(title: 'Status Konsumsi'),
-                const SizedBox(height: 12),
-                GlobalStatusCard(status: globalStatus),
-                const SizedBox(height: 16),
-                _ConsumptionAlertActions(
-                  dashboard: dashboard,
-                  firebaseService: widget.firebaseService,
-                ),
-                const SizedBox(height: 24),
-                const SectionTitle(title: 'Konsumsi per Ruangan'),
-                const SizedBox(height: 12),
-                DeviceClassificationCard(rooms: dashboard.rooms),
-                if (highRooms.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  AlertCard(rooms: highRooms),
-                ],
-                const SizedBox(height: 24),
-                const SectionTitle(title: 'Total Konsumsi Rumah'),
-                const SizedBox(height: 12),
-                TotalConsumptionCard(
-                  totalConsumption: dashboard.totalConsumption,
-                ),
-                const SizedBox(height: 24),
-                const SectionTitle(title: 'Parameter Listrik Real-Time'),
-                const SizedBox(height: 12),
-                MetricsGrid(
-                  data: dashboard.totalConsumption,
-                  showPowerAndEnergy: false,
-                ),
-                const SizedBox(height: 24),
-                const SectionTitle(title: 'Status Koneksi Perangkat'),
-                const SizedBox(height: 12),
-                DeviceStatusCard(snapshot: dashboard),
-              ],
-            );
-          },
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          children: [
+            const SectionTitle(title: 'Status Konsumsi'),
+            const SizedBox(height: 12),
+            GlobalStatusCard(status: dashboard.globalClassificationLabel),
+            const SizedBox(height: 24),
+            const SectionTitle(title: 'Konsumsi per Ruangan'),
+            const SizedBox(height: 12),
+            DeviceClassificationCard(rooms: dashboard.rooms),
+            const SizedBox(height: 24),
+            const SectionTitle(title: 'Total Konsumsi Rumah'),
+            const SizedBox(height: 12),
+            TotalConsumptionCard(totalConsumption: dashboard.totalConsumption),
+            const SizedBox(height: 24),
+            const SectionTitle(title: 'Parameter Listrik Real-Time'),
+            const SizedBox(height: 12),
+            MetricsGrid(
+              data: dashboard.totalConsumption,
+              showPowerAndEnergy: false,
+            ),
+            const SizedBox(height: 24),
+            const SectionTitle(title: 'Status Koneksi Perangkat'),
+            const SizedBox(height: 12),
+            DeviceStatusCard(snapshot: dashboard),
+          ],
         );
       },
     );
   }
 
-  @override
-  bool get wantKeepAlive => true;
-}
+  void _handleClassificationChange(DashboardSnapshot dashboard) {
+    final classification = dashboard.globalClassificationLabel.toLowerCase();
+    if (_lastHandledClassification == classification) {
+      return;
+    }
+    _lastHandledClassification = classification;
 
-class _ConsumptionAlertActions extends StatelessWidget {
-  const _ConsumptionAlertActions({
-    required this.dashboard,
-    required this.firebaseService,
-  });
+    if (classification == 'waspada') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _showWaspadaPopup();
+      });
+      return;
+    }
 
-  final DashboardSnapshot dashboard;
-  final FirebaseService firebaseService;
+    if (classification == 'boros') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isBorosRecommendationOpen) {
+          return;
+        }
+        _showBorosRecommendation(dashboard);
+      });
+    }
+  }
 
-  void _showWaspadaPopup(BuildContext context) {
+  void _showWaspadaPopup() {
     NotificationService.instance.showWaspadaAlert();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -129,11 +125,12 @@ class _ConsumptionAlertActions extends StatelessWidget {
       );
   }
 
-  void _showBorosRecommendation(BuildContext context) {
+  Future<void> _showBorosRecommendation(DashboardSnapshot dashboard) async {
     NotificationService.instance.showBorosAlert();
     final recommendedRooms = _recommendedRooms(dashboard);
+    _isBorosRecommendationOpen = true;
 
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       constraints: BoxConstraints(
@@ -215,7 +212,7 @@ class _ConsumptionAlertActions extends StatelessWidget {
                           ) ...[
                             _RecommendedRelayCard(
                               room: recommendedRooms[index],
-                              firebaseService: firebaseService,
+                              firebaseService: widget.firebaseService,
                             ),
                             if (index != recommendedRooms.length - 1)
                               const SizedBox(height: 12),
@@ -230,6 +227,8 @@ class _ConsumptionAlertActions extends StatelessWidget {
         );
       },
     );
+
+    _isBorosRecommendationOpen = false;
   }
 
   List<RoomDashboardData> _recommendedRooms(DashboardSnapshot dashboard) {
@@ -249,84 +248,7 @@ class _ConsumptionAlertActions extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 10,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 420;
-          final buttons = [
-            _AlertActionButton(
-              icon: Icons.notifications_active_outlined,
-              label: 'Popup Waspada',
-              color: const Color(0xFFF59E0B),
-              onPressed: () => _showWaspadaPopup(context),
-            ),
-            _AlertActionButton(
-              icon: Icons.tips_and_updates_outlined,
-              label: 'Rekomendasi Boros',
-              color: const Color(0xFFDC2626),
-              onPressed: () => _showBorosRecommendation(context),
-            ),
-          ];
-
-          if (isWide) {
-            return Row(
-              children: [
-                Expanded(child: buttons[0]),
-                const SizedBox(width: 12),
-                Expanded(child: buttons[1]),
-              ],
-            );
-          }
-
-          return Column(
-            children: [buttons[0], const SizedBox(height: 10), buttons[1]],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _AlertActionButton extends StatelessWidget {
-  const _AlertActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
+  bool get wantKeepAlive => true;
 }
 
 class _RecommendedRelayCard extends StatelessWidget {

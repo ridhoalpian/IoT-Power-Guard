@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/dashboard_snapshot.dart';
 import '../models/device_connection_summary.dart';
@@ -20,6 +21,9 @@ class FirebaseService {
 
   static const String _databaseUrl =
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
+  static final Uri _predictionEndpoint = Uri.parse(
+    'https://hetrack-knn.onrender.com/predict',
+  );
   static const String _iotRootPath = 'iot_power_guard';
   static const int _defaultRelayCount = 3;
   static const int _deviceOfflineThresholdMs = 20000;
@@ -32,14 +36,17 @@ class FirebaseService {
   static const List<_DashboardRoomConfig> _dashboardRoomConfigs = [
     _DashboardRoomConfig(
       label: 'Dapur',
+      roomId: 'dapur',
       aliases: ['dapur', 'kitchen', 'device1', 'esp32_1'],
     ),
     _DashboardRoomConfig(
       label: 'Kamar',
+      roomId: 'kamar',
       aliases: ['kamar', 'bedroom', 'bed', 'device2', 'esp32_2'],
     ),
     _DashboardRoomConfig(
       label: 'Ruang Tengah',
+      roomId: 'ruang_tengah',
       aliases: [
         'ruang tengah',
         'ruang_tengah',
@@ -134,14 +141,59 @@ class FirebaseService {
     StreamSubscription<Map<String, dynamic>>? subscription;
     Timer? timer;
     Map<String, dynamic> latestDeviceState = const {};
+    final predictionsByRoom = <String, _PredictionCacheEntry>{};
+    final pendingPredictionKeys = <String>{};
 
     void emitSnapshot() {
       if (controller.isClosed) {
         return;
       }
       controller.add(
-        _buildDashboardSnapshot(latestDeviceState, offlineThreshold: threshold),
+        _buildDashboardSnapshot(
+          latestDeviceState,
+          offlineThreshold: threshold,
+          predictionsByRoom: predictionsByRoom,
+        ),
       );
+    }
+
+    Future<void> refreshPredictions() async {
+      final snapshot = _buildDashboardSnapshot(
+        latestDeviceState,
+        offlineThreshold: threshold,
+        predictionsByRoom: predictionsByRoom,
+      );
+
+      for (final room in snapshot.rooms) {
+        if (!room.hasAssignedDevice) {
+          continue;
+        }
+        final config = _roomConfigByLabel(room.roomName);
+        if (config == null) {
+          continue;
+        }
+        final predictionKey = _predictionKey(config.roomId, room.monitoring);
+        if (predictionsByRoom[room.roomName]?.key == predictionKey ||
+            pendingPredictionKeys.contains(predictionKey)) {
+          continue;
+        }
+
+        pendingPredictionKeys.add(predictionKey);
+        _predictConsumption(config.roomId, room.monitoring)
+            .then((prediction) {
+              predictionsByRoom[room.roomName] = _PredictionCacheEntry(
+                key: predictionKey,
+                prediction: prediction,
+              );
+              emitSnapshot();
+            })
+            .catchError((Object error, StackTrace stackTrace) {
+              debugPrint('Failed to predict ${config.roomId}: $error');
+            })
+            .whenComplete(() {
+              pendingPredictionKeys.remove(predictionKey);
+            });
+      }
     }
 
     controller = StreamController<DashboardSnapshot>.broadcast(
@@ -153,9 +205,11 @@ class FirebaseService {
             .listen((value) {
               latestDeviceState = value;
               emitSnapshot();
+              unawaited(refreshPredictions());
             }, onError: controller.addError);
         timer = Timer.periodic(const Duration(seconds: 1), (_) {
           emitSnapshot();
+          unawaited(refreshPredictions());
         });
       },
       onCancel: () async {
@@ -414,6 +468,24 @@ class FirebaseService {
     return true;
   }
 
+  static bool _doubleMapEquals(
+    Map<String, double> previous,
+    Map<String, double> next,
+  ) {
+    if (identical(previous, next)) {
+      return true;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (final entry in previous.entries) {
+      if (next[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   static bool _electricalDataEquals(
     ElectricalData previous,
     ElectricalData next,
@@ -421,7 +493,8 @@ class FirebaseService {
     return previous.voltage == next.voltage &&
         previous.current == next.current &&
         previous.power == next.power &&
-        previous.energy == next.energy;
+        previous.energy == next.energy &&
+        previous.duration == next.duration;
   }
 
   static bool _connectionSummaryEquals(
@@ -458,6 +531,8 @@ class FirebaseService {
       if (prevRoom.roomName != nextRoom.roomName ||
           prevRoom.deviceId != nextRoom.deviceId ||
           prevRoom.classification != nextRoom.classification ||
+          prevRoom.prediction != nextRoom.prediction ||
+          !_doubleMapEquals(prevRoom.probabilities, nextRoom.probabilities) ||
           prevRoom.isOnline != nextRoom.isOnline ||
           prevRoom.lastSeen != nextRoom.lastSeen ||
           prevRoom.hasAssignedDevice != nextRoom.hasAssignedDevice ||
@@ -525,6 +600,7 @@ class FirebaseService {
   DashboardSnapshot _buildDashboardSnapshot(
     Map<String, dynamic> deviceStateById, {
     required Duration offlineThreshold,
+    Map<String, _PredictionCacheEntry> predictionsByRoom = const {},
   }) {
     if (deviceStateById.isEmpty) {
       return DashboardSnapshot.empty();
@@ -578,11 +654,21 @@ class FirebaseService {
           if (assignedDevice == null) {
             return RoomDashboardData.placeholder(config.label);
           }
+          final prediction = predictionsByRoom[config.label];
+          final predictionKey = _predictionKey(
+            config.roomId,
+            assignedDevice.monitoring,
+          );
+          final aiPrediction =
+              prediction?.key == predictionKey ? prediction?.prediction : null;
           return RoomDashboardData(
             roomName: config.label,
             deviceId: assignedDevice.deviceId,
             monitoring: assignedDevice.monitoring,
-            classification: assignedDevice.classification,
+            classification:
+                aiPrediction?.level ?? assignedDevice.classification,
+            prediction: aiPrediction?.prediction,
+            probabilities: aiPrediction?.probabilities ?? const {},
             isOnline: assignedDevice.isOnline,
             lastSeen: assignedDevice.lastSeen,
             hasAssignedDevice: true,
@@ -595,6 +681,81 @@ class FirebaseService {
       totalConsumption: ElectricalData.aggregate(totalReadings),
       latestLastSeen: latestLastSeen,
     );
+  }
+
+  Future<_AiConsumptionPrediction> _predictConsumption(
+    String roomId,
+    ElectricalData monitoring,
+  ) async {
+    final response = await http
+        .post(
+          _predictionEndpoint,
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'room': roomId,
+            'features': [
+              monitoring.voltage,
+              monitoring.current,
+              monitoring.power,
+              monitoring.duration,
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+        'Prediction request failed with HTTP ${response.statusCode}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const FormatException('Prediction response must be a JSON object');
+    }
+
+    final prediction = decoded['prediction']?.toString() ?? 'Normal';
+    final probabilities = _parseProbabilities(decoded['probabilities']);
+    return _AiConsumptionPrediction(
+      prediction: prediction,
+      level: _parseConsumptionLevel(prediction) ?? ConsumptionLevel.low,
+      probabilities: probabilities,
+    );
+  }
+
+  _DashboardRoomConfig? _roomConfigByLabel(String label) {
+    for (final config in _dashboardRoomConfigs) {
+      if (config.label == label) {
+        return config;
+      }
+    }
+    return null;
+  }
+
+  static String _predictionKey(String roomId, ElectricalData monitoring) {
+    return [
+      roomId,
+      monitoring.voltage.toStringAsFixed(3),
+      monitoring.current.toStringAsFixed(6),
+      monitoring.power.toStringAsFixed(3),
+      monitoring.duration.toStringAsFixed(3),
+    ].join('|');
+  }
+
+  static Map<String, double> _parseProbabilities(dynamic value) {
+    if (value is! Map) {
+      return const {};
+    }
+    final probabilities = <String, double>{};
+    for (final entry in value.entries) {
+      final rawValue = entry.value;
+      if (rawValue is num) {
+        probabilities[entry.key.toString()] = rawValue.toDouble();
+      } else if (rawValue is String) {
+        probabilities[entry.key.toString()] = double.tryParse(rawValue) ?? 0;
+      }
+    }
+    return probabilities;
   }
 
   Map<String, _ResolvedDashboardDevice> _assignDashboardRooms(
@@ -796,10 +957,34 @@ class FirebaseService {
 }
 
 class _DashboardRoomConfig {
-  const _DashboardRoomConfig({required this.label, required this.aliases});
+  const _DashboardRoomConfig({
+    required this.label,
+    required this.roomId,
+    required this.aliases,
+  });
 
   final String label;
+  final String roomId;
   final List<String> aliases;
+}
+
+class _PredictionCacheEntry {
+  const _PredictionCacheEntry({required this.key, required this.prediction});
+
+  final String key;
+  final _AiConsumptionPrediction prediction;
+}
+
+class _AiConsumptionPrediction {
+  const _AiConsumptionPrediction({
+    required this.prediction,
+    required this.level,
+    required this.probabilities,
+  });
+
+  final String prediction;
+  final ConsumptionLevel level;
+  final Map<String, double> probabilities;
 }
 
 class _ResolvedDashboardDevice {
