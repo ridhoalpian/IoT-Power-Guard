@@ -165,7 +165,7 @@ class _DashboardPageState extends State<DashboardPage>
         if (!mounted || _isBorosRecommendationOpen) {
           return;
         }
-        _showBorosRecommendation(dashboard);
+        _showBorosPrompt(dashboard);
       });
     }
   }
@@ -195,8 +195,42 @@ class _DashboardPageState extends State<DashboardPage>
       );
   }
 
-  Future<void> _showBorosRecommendation(DashboardSnapshot dashboard) async {
+  void _showBorosPrompt(DashboardSnapshot dashboard) {
     NotificationService.instance.showBorosAlert();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFFDC2626),
+          action: SnackBarAction(
+            label: 'Atur',
+            textColor: Colors.white,
+            onPressed: () {
+              if (!mounted || _isBorosRecommendationOpen) {
+                return;
+              }
+              _showBorosRecommendation(dashboard);
+            },
+          ),
+          content: Row(
+            children: const [
+              Icon(Icons.priority_high_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Klasifikasi BOROS. Atur relay untuk menurunkan beban.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
+  Future<void> _showBorosRecommendation(DashboardSnapshot dashboard) async {
     final recommendedRooms = _recommendedRooms(dashboard);
     _isBorosRecommendationOpen = true;
 
