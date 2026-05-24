@@ -87,6 +87,16 @@ class FirebaseService {
         .distinct(_electricalDataEquals);
   }
 
+  Stream<ConsumptionLevel> deviceClassificationStream(String deviceId) {
+    return _deviceRoot.child(deviceId).onValue.map((event) {
+      final deviceMap = _asMap(event.snapshot.value);
+      final monitoringMap = _asMap(deviceMap['monitoring']);
+      final monitoring = ElectricalData.fromMap(monitoringMap);
+      return _resolveConsumptionLevel(deviceMap, monitoringMap) ??
+          _classifyByPower(monitoring.power);
+    }).distinct();
+  }
+
   Stream<DeviceProfile> deviceProfileStream(
     String deviceId, {
     required String fallbackName,
@@ -327,13 +337,17 @@ class FirebaseService {
   }
 
   Future<void> resetEnergyConsumption(Iterable<String> deviceIds) {
-    final updates = <String, Object>{};
+    final updates = <String, Object?>{};
     for (final deviceId in deviceIds) {
       final trimmedDeviceId = deviceId.trim();
       if (trimmedDeviceId.isEmpty) {
         continue;
       }
       updates['$trimmedDeviceId/monitoring/energy'] = 0;
+      updates['$trimmedDeviceId/commands/reset_energy'] = {
+        'requested_at': ServerValue.timestamp,
+        'status': 'pending',
+      };
     }
     if (updates.isEmpty) {
       return Future.value();
@@ -861,4 +875,5 @@ class _ResolvedDashboardDevice {
   final ElectricalData monitoring;
   final ConsumptionLevel classification;
   final bool isOnline;
-  final
+  final DateTime? lastSeen;
+}
