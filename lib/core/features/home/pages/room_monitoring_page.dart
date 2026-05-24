@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/dashboard_snapshot.dart';
 import '../../../models/device_profile.dart';
 import '../../../models/electrical_data.dart';
 import '../../../services/firebase_service.dart';
@@ -362,6 +363,14 @@ class _DeviceMonitoringCard extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
+          StreamBuilder<ConsumptionLevel>(
+            stream: firebaseService.deviceClassificationStream(deviceId),
+            builder: (context, snapshot) {
+              final classification = snapshot.data ?? ConsumptionLevel.low;
+              return _ClassificationSummary(classification: classification);
+            },
+          ),
+          const SizedBox(height: 12),
           StreamBuilder<ElectricalData>(
             stream: firebaseService.deviceMonitoringStream(deviceId),
             builder: (context, snapshot) {
@@ -381,4 +390,82 @@ class _DeviceMonitoringCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ClassificationSummary extends StatelessWidget {
+  const _ClassificationSummary({required this.classification});
+
+  final ConsumptionLevel classification;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = _classificationTone(classification);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tone.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tone.color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        children: [
+          Icon(tone.icon, color: tone.color, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Klasifikasi Konsumsi',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: tone.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              classification.label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: tone.color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+_ClassificationTone _classificationTone(ConsumptionLevel level) {
+  switch (level) {
+    case ConsumptionLevel.low:
+      return const _ClassificationTone(
+        color: Color(0xFF16A34A),
+        icon: Icons.check_circle_outline,
+      );
+    case ConsumptionLevel.medium:
+      return const _ClassificationTone(
+        color: Color(0xFFF59E0B),
+        icon: Icons.warning_amber_rounded,
+      );
+    case ConsumptionLevel.high:
+      return const _ClassificationTone(
+        color: Color(0xFFDC2626),
+        icon: Icons.priority_high_rounded,
+      );
+  }
+}
+
+class _ClassificationTone {
+  const _ClassificationTone({required this.color, required this.icon});
+
+  final Color color;
+  final IconData icon;
 }
