@@ -1,18 +1,196 @@
 const admin = require("firebase-admin");
 const {logger} = require("firebase-functions");
+const {onValueWritten} = require("firebase-functions/v2/database");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 
 admin.initializeApp();
 
 const DEVICE_ROOT = "device";
 const APP_ROOT = "iot_power_guard";
+const DATABASE_INSTANCE = "home-electrical-tracking-54460-default-rtdb";
+const DATABASE_REGION = "asia-southeast1";
 const TOKEN_ROOT = `${APP_ROOT}/notification_tokens`;
 const ALERT_ROOT = `${APP_ROOT}/offline_alerts`;
+const CLASSIFICATION_ALERT_ROOT = `${APP_ROOT}/classification_alerts`;
+const DEVICE_CLASSIFICATION_ROOT = `${DEVICE_ROOT}/{deviceId}/knn/classification`;
+const DEVICE_MONITORING_ROOT = `${DEVICE_ROOT}/{deviceId}/monitoring`;
+const PREDICTION_ENDPOINT = "https://hetrack-knn.onrender.com/predict";
 const OFFLINE_THRESHOLD_MS = 20 * 1000;
 const EPOCH_MS_THRESHOLD = 1000000000000;
 const EPOCH_SECONDS_THRESHOLD = 1000000000;
 const UINT32_MOD = 4294967296;
 const MAX_REASONABLE_LAST_SEEN_DRIFT_MS = 31536000000;
+const LOW_CONSUMPTION_THRESHOLD_WATTS = 150;
+const MEDIUM_CONSUMPTION_THRESHOLD_WATTS = 400;
+const DASHBOARD_ROOM_CONFIGS = [
+  {
+    roomId: "dapur",
+    aliases: ["dapur", "kitchen", "device1", "esp32_1"],
+  },
+  {
+    roomId: "kamar",
+    aliases: ["kamar", "bedroom", "bed", "device2", "esp32_2"],
+  },
+  {
+    roomId: "ruang_tengah",
+    aliases: [
+      "ruang tengah",
+      "ruang_tengah",
+      "living room",
+      "living",
+      "device3",
+      "esp32_3",
+    ],
+  },
+];
+
+exports.classifyDeviceMonitoring = onValueWritten(
+  {
+    ref: DEVICE_MONITORING_ROOT,
+    instance: DATABASE_INSTANCE,
+    region: DATABASE_REGION,
+    timeoutSeconds: 60,
+  },
+  async (event) => {
+    const deviceId = event.params.deviceId;
+    const monitoring = asMap(event.data.after.val());
+    if (Object.keys(monitoring).length === 0) {
+      return;
+    }
+
+    const deviceRef = admin.database().ref(`${DEVICE_ROOT}/${deviceId}`);
+    const deviceSnapshot = await deviceRef.get();
+    const device = asMap(deviceSnapshot.val());
+    const roomId = resolveRoomId(deviceId, device);
+    const features = monitoringFeatures(monitoring);
+
+    let prediction;
+    try {
+      prediction = await requestPrediction(roomId, features);
+    } catch (error) {
+      logger.error("Gagal meminta prediksi KNN dari Render.", {
+        deviceId,
+        roomId,
+        error: error.message,
+      });
+      prediction = {
+        classification: classifyByPower(features.power),
+        probabilities: {},
+        source: "power_threshold_fallback",
+      };
+    }
+
+    const currentClassification = canonicalClassification(
+      asMap(device.knn).classification
+    );
+    const nextClassification = canonicalClassification(
+      prediction.classification
+    );
+    if (!nextClassification || currentClassification === nextClassification) {
+      return;
+    }
+
+    await deviceRef.child("knn").update({
+      classification: classificationLabel(nextClassification),
+      probabilities: prediction.probabilities,
+      room: roomId,
+      source: prediction.source,
+      updated_at: admin.database.ServerValue.TIMESTAMP,
+    });
+
+    logger.info("Device classification updated", {
+      deviceId,
+      roomId,
+      classification: nextClassification,
+      source: prediction.source,
+    });
+  }
+);
+
+exports.notifyClassificationChange = onValueWritten(
+  {
+    ref: DEVICE_CLASSIFICATION_ROOT,
+    instance: DATABASE_INSTANCE,
+    region: DATABASE_REGION,
+  },
+  async (event) => {
+    const deviceId = event.params.deviceId;
+    const before = canonicalClassification(event.data.before.val());
+    const after = canonicalClassification(event.data.after.val());
+
+    if (before === after) {
+      return;
+    }
+
+    const alertRef = admin.database().ref(
+      `${CLASSIFICATION_ALERT_ROOT}/${deviceId}`
+    );
+
+    if (!isAlertClassification(after)) {
+      await alertRef.remove();
+      return;
+    }
+
+    const [tokenSnapshot, alertSnapshot, deviceSnapshot] = await Promise.all([
+      admin.database().ref(TOKEN_ROOT).get(),
+      alertRef.get(),
+      admin.database().ref(`${DEVICE_ROOT}/${deviceId}`).get(),
+    ]);
+
+    const previousAlert = asMap(alertSnapshot.val());
+    if (previousAlert.notified_for === after) {
+      return;
+    }
+
+    const tokens = extractTokens(asMap(tokenSnapshot.val()));
+    if (tokens.length === 0) {
+      logger.warn("FCM token belum tersedia untuk notifikasi klasifikasi.", {
+        deviceId,
+        classification: after,
+      });
+      return;
+    }
+
+    const deviceName = resolveDeviceName(deviceId, asMap(deviceSnapshot.val()));
+    const alert = classificationAlert(after, deviceName);
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: alert.title,
+        body: alert.body,
+      },
+      data: {
+        type: "classification_alert",
+        deviceId,
+        deviceName,
+        classification: after,
+        title: alert.title,
+        body: alert.body,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: alert.channelId,
+        },
+      },
+    });
+
+    logger.info("Classification notification sent", {
+      deviceId,
+      deviceName,
+      classification: after,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
+
+    await alertRef.set({
+      device_name: deviceName,
+      classification: after,
+      notified_at: admin.database.ServerValue.TIMESTAMP,
+      notified_for: after,
+    });
+  }
+);
 
 exports.notifyOfflineDevices = onSchedule("every 1 minutes", async () => {
   const db = admin.database();
@@ -126,6 +304,153 @@ function extractTokens(tokenMap) {
     }
   }
   return [...new Set(values)];
+}
+
+function normalizeClassification(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return value.toString().trim().toLowerCase();
+}
+
+function canonicalClassification(value) {
+  const normalized = normalizeClassification(value);
+  if (normalized === "high" || normalized === "tinggi" ||
+      normalized === "boros") {
+    return "boros";
+  }
+  if (normalized === "medium" || normalized === "sedang" ||
+      normalized === "waspada") {
+    return "waspada";
+  }
+  if (normalized === "low" || normalized === "normal" ||
+      normalized === "aman") {
+    return "normal";
+  }
+  return normalized;
+}
+
+function isAlertClassification(value) {
+  const classification = canonicalClassification(value);
+  return classification === "waspada" || classification === "boros";
+}
+
+function classificationLabel(classification) {
+  const canonical = canonicalClassification(classification);
+  if (canonical === "boros") {
+    return "Boros";
+  }
+  if (canonical === "waspada") {
+    return "Waspada";
+  }
+  return "Normal";
+}
+
+function classifyByPower(power) {
+  if (power >= MEDIUM_CONSUMPTION_THRESHOLD_WATTS) {
+    return "Boros";
+  }
+  if (power >= LOW_CONSUMPTION_THRESHOLD_WATTS) {
+    return "Waspada";
+  }
+  return "Normal";
+}
+
+function monitoringFeatures(monitoring) {
+  return {
+    voltage: numberValue(monitoring.voltage),
+    current: numberValue(monitoring.current),
+    power: numberValue(monitoring.power),
+    duration: numberValue(monitoring.duration),
+  };
+}
+
+function numberValue(value) {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+async function requestPrediction(roomId, features) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(PREDICTION_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        room: roomId,
+        features: [
+          features.voltage,
+          features.current,
+          features.power,
+          features.duration,
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Render returned HTTP ${response.status}`);
+    }
+
+    const decoded = await response.json();
+    return {
+      classification: decoded.prediction ?? "Normal",
+      probabilities: asMap(decoded.probabilities),
+      source: "render_knn",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function resolveRoomId(deviceId, device) {
+  const profile = asMap(device.profile);
+  const candidates = [
+    deviceId,
+    profile.name,
+    profile.room,
+    profile.icon,
+    device.name,
+    device.room,
+  ]
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim().toLowerCase());
+
+  for (const config of DASHBOARD_ROOM_CONFIGS) {
+    if (candidates.some((candidate) => {
+      return config.aliases.some((alias) => candidate.includes(alias));
+    })) {
+      return config.roomId;
+    }
+  }
+  return deviceId;
+}
+
+function classificationAlert(classification, deviceName) {
+  if (classification === "boros") {
+    return {
+      title: "Peringatan Konsumsi Tinggi",
+      body:
+        `${deviceName} berada pada level BOROS. ` +
+        "Silahkan periksa beban listrik Anda.",
+      channelId: "boros_channel",
+    };
+  }
+
+  return {
+    title: "Peringatan Konsumsi",
+    body:
+      `${deviceName} berada pada level WASPADA. ` +
+      "Pantau konsumsi listrik Anda.",
+    channelId: "waspada_channel",
+  };
 }
 
 function normalizeConnectionStatus(value) {

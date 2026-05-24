@@ -1,4 +1,39 @@
-# Cloud Functions for Offline Notifications
+# Cloud Functions for Notifications
+
+## Classification alert via FCM
+
+Function `classifyDeviceMonitoring` memantau perubahan monitoring:
+
+`device/{deviceId}/monitoring`
+
+Saat monitoring berubah, function memanggil endpoint KNN Render:
+
+`https://hetrack-knn.onrender.com/predict`
+
+Lalu hasilnya ditulis ke canonical path:
+
+`device/{deviceId}/knn/classification`
+
+Function `notifyClassificationChange` memantau canonical path tersebut. Jika
+nilainya berubah ke `waspada` atau `boros`, function akan mengambil token dari:
+
+`iot_power_guard/notification_tokens/{encodedToken}`
+
+lalu mengirim Firebase Cloud Messaging ke semua token terdaftar.
+
+State dedupe disimpan di:
+
+`iot_power_guard/classification_alerts/{deviceId}`
+
+Channel Android yang dipakai:
+
+- `waspada_channel` untuk klasifikasi Waspada
+- `boros_channel` untuk klasifikasi Boros
+
+Di sisi app, local notification untuk klasifikasi tidak lagi dipicu langsung dari
+listener realtime agar tidak dobel dengan FCM. Snackbar di dashboard tetap
+ditampilkan sebagai feedback saat user sedang membuka halaman Home. App tidak
+lagi memanggil endpoint Render atau menulis hasil klasifikasi ke RTDB.
 
 Offline notification sekarang berjalan langsung dari aplikasi mobile lewat
 listener RTDB + local notification. Cloud Functions di folder ini tidak lagi

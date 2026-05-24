@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../services/firebase_service.dart';
-import '../../services/notification_service.dart';
 import 'pages/account_info_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/relay_control_page.dart';
@@ -23,8 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseService _firebaseService = FirebaseService.instance;
   late final PageController _pageController;
   late final List<Widget> _pages;
-  StreamSubscription<String>? _statusSubscription;
-  String? _lastStatus;
   int _currentIndex = 0;
 
   static const List<String> _titles = [
@@ -53,30 +48,10 @@ class _HomeScreenState extends State<HomeScreen> {
       RelayControlPage(firebaseService: _firebaseService),
       const AccountInfoPage(),
     ];
-    _statusSubscription = _firebaseService.classificationStream.listen(
-      _handleStatusUpdate,
-    );
-  }
-
-  void _handleStatusUpdate(String status) {
-    final normalized = status.trim();
-    if (_lastStatus == normalized) {
-      return;
-    }
-
-    final lower = normalized.toLowerCase();
-    if (lower == 'boros') {
-      NotificationService.instance.showBorosAlert();
-    } else if (lower == 'waspada') {
-      NotificationService.instance.showWaspadaAlert();
-    }
-
-    _lastStatus = normalized;
   }
 
   @override
   void dispose() {
-    _statusSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
   }

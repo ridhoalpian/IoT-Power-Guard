@@ -61,11 +61,13 @@ class DashboardSnapshot {
     required this.rooms,
     required this.totalConsumption,
     required this.latestLastSeen,
+    this.deviceIds = const [],
   });
 
   final List<RoomDashboardData> rooms;
   final ElectricalData totalConsumption;
   final DateTime? latestLastSeen;
+  final List<String> deviceIds;
 
   bool get hasAssignedDevices => rooms.any((room) => room.hasAssignedDevice);
 
@@ -104,6 +106,7 @@ class DashboardSnapshot {
       ],
       totalConsumption: ElectricalData.empty(),
       latestLastSeen: null,
+      deviceIds: const [],
     );
   }
 }

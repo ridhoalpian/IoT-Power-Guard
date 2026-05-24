@@ -59,7 +59,17 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
         StreamBuilder<List<String>>(
           stream: _deviceIdListStream,
           builder: (context, snapshot) {
-            final deviceIds = snapshot.data ?? const <String>[];
+            if (snapshot.hasError) {
+              return const RealtimeErrorCard(
+                message: 'Gagal memuat daftar device realtime.',
+              );
+            }
+
+            if (!snapshot.hasData) {
+              return const RoomMonitoringLoadingSkeleton();
+            }
+
+            final deviceIds = snapshot.data!;
 
             if (deviceIds.isEmpty) {
               return Container(
@@ -312,12 +322,11 @@ class _DeviceMonitoringCard extends StatelessWidget {
               fallbackIconKey: defaultIconKey,
             ),
             builder: (context, snapshot) {
-              final profile =
-                  snapshot.data ??
-                  DeviceProfile(
-                    name: 'Device $deviceId',
-                    iconKey: defaultIconKey,
-                  );
+              if (!snapshot.hasData) {
+                return const DeviceHeaderLoadingSkeleton();
+              }
+
+              final profile = snapshot.data!;
               return Row(
                 children: [
                   Container(
@@ -356,6 +365,10 @@ class _DeviceMonitoringCard extends StatelessWidget {
           StreamBuilder<ElectricalData>(
             stream: firebaseService.deviceMonitoringStream(deviceId),
             builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const DeviceMetricsLoadingSkeleton();
+              }
+
               final data = snapshot.data ?? ElectricalData.empty();
               return MetricsGrid(
                 data: data,

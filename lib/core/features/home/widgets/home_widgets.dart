@@ -716,6 +716,148 @@ class InfoTile extends StatelessWidget {
   }
 }
 
+class RealtimeErrorCard extends StatelessWidget {
+  const RealtimeErrorCard({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 40,
+              width: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_tethering_error_rounded,
+                color: Color(0xFFDC2626),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF991B1B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DashboardLoadingSkeleton extends StatelessWidget {
+  const DashboardLoadingSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: const [
+        _LoadingLabel(text: 'Memuat data realtime...'),
+        SizedBox(height: 12),
+        _StatusSkeletonCard(),
+        SizedBox(height: 24),
+        SectionTitle(title: 'Konsumsi per Ruangan'),
+        SizedBox(height: 12),
+        _RoomClassificationSkeletonCard(),
+        SizedBox(height: 24),
+        SectionTitle(title: 'Total Konsumsi Rumah'),
+        SizedBox(height: 12),
+        _TotalConsumptionSkeletonCard(),
+        SizedBox(height: 24),
+        SectionTitle(title: 'Parameter Listrik Real-Time'),
+        SizedBox(height: 12),
+        DeviceMetricsLoadingSkeleton(tileCount: 2),
+        SizedBox(height: 24),
+        SectionTitle(title: 'Status Koneksi Perangkat'),
+        SizedBox(height: 12),
+        _DeviceStatusSkeletonCard(),
+      ],
+    );
+  }
+}
+
+class RoomMonitoringLoadingSkeleton extends StatelessWidget {
+  const RoomMonitoringLoadingSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _LoadingLabel(text: 'Memuat device realtime...'),
+        SizedBox(height: 12),
+        _DeviceMonitoringSkeletonCard(),
+        SizedBox(height: 16),
+        _DeviceMonitoringSkeletonCard(),
+      ],
+    );
+  }
+}
+
+class DeviceHeaderLoadingSkeleton extends StatelessWidget {
+  const DeviceHeaderLoadingSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        _SkeletonCircle(size: 44),
+        SizedBox(width: 12),
+        Expanded(child: _SkeletonBlock(height: 18)),
+        SizedBox(width: 12),
+        _SkeletonCircle(size: 36),
+      ],
+    );
+  }
+}
+
+class DeviceMetricsLoadingSkeleton extends StatelessWidget {
+  const DeviceMetricsLoadingSkeleton({super.key, this.tileCount = 4});
+
+  final int tileCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 640 ? 4 : 2;
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: crossAxisCount == 4 ? 1.05 : 1.4,
+          children: [
+            for (var index = 0; index < tileCount; index++)
+              const _MetricSkeletonTile(),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _DashboardSurfaceCard extends StatelessWidget {
   const _DashboardSurfaceCard({required this.child, this.elevated = true});
 
@@ -741,6 +883,251 @@ class _DashboardSurfaceCard extends StatelessWidget {
                 : null,
       ),
       child: child,
+    );
+  }
+}
+
+class _LoadingLabel extends StatelessWidget {
+  const _LoadingLabel({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          height: 16,
+          width: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFF0A7A6F),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusSkeletonCard extends StatelessWidget {
+  const _StatusSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardSurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: const [
+            _SkeletonCircle(size: 44),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SkeletonBlock(width: 130, height: 12),
+                  SizedBox(height: 10),
+                  _SkeletonBlock(width: 90, height: 20),
+                  SizedBox(height: 8),
+                  _SkeletonBlock(height: 12),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            _SkeletonBlock(width: 78, height: 28, radius: 999),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomClassificationSkeletonCard extends StatelessWidget {
+  const _RoomClassificationSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardSurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            for (var index = 0; index < 3; index++) ...[
+              const _RoomSkeletonRow(),
+              if (index != 2) const SizedBox(height: 14),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomSkeletonRow extends StatelessWidget {
+  const _RoomSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: const [
+        _SkeletonCircle(size: 38),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SkeletonBlock(width: 120, height: 14),
+              SizedBox(height: 6),
+              _SkeletonBlock(width: 84, height: 10),
+            ],
+          ),
+        ),
+        _SkeletonBlock(width: 82, height: 28, radius: 999),
+      ],
+    );
+  }
+}
+
+class _TotalConsumptionSkeletonCard extends StatelessWidget {
+  const _TotalConsumptionSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardSurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            _SkeletonBlock(width: 180, height: 16),
+            SizedBox(height: 16),
+            DeviceMetricsLoadingSkeleton(tileCount: 2),
+            SizedBox(height: 12),
+            _SkeletonBlock(height: 82, radius: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceStatusSkeletonCard extends StatelessWidget {
+  const _DeviceStatusSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardSurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: const [
+            DeviceHeaderLoadingSkeleton(),
+            SizedBox(height: 16),
+            _RoomSkeletonRow(),
+            SizedBox(height: 10),
+            _RoomSkeletonRow(),
+            SizedBox(height: 10),
+            _RoomSkeletonRow(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceMonitoringSkeletonCard extends StatelessWidget {
+  const _DeviceMonitoringSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DeviceHeaderLoadingSkeleton(),
+          SizedBox(height: 12),
+          DeviceMetricsLoadingSkeleton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricSkeletonTile extends StatelessWidget {
+  const _MetricSkeletonTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardSurfaceCard(
+      elevated: false,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            _SkeletonCircle(size: 24),
+            _SkeletonBlock(width: 96, height: 12),
+            _SkeletonBlock(width: 72, height: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonCircle extends StatelessWidget {
+  const _SkeletonCircle({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SkeletonBlock(width: size, height: size, radius: size / 2);
+  }
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  const _SkeletonBlock({
+    this.width = double.infinity,
+    required this.height,
+    this.radius = 8,
+  });
+
+  final double width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(radius),
+      ),
     );
   }
 }

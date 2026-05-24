@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../models/dashboard_snapshot.dart';
 import '../../../services/firebase_service.dart';
-import '../../../services/notification_service.dart';
 import '../widgets/home_widgets.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -39,7 +38,15 @@ class _DashboardPageState extends State<DashboardPage>
     return StreamBuilder<DashboardSnapshot>(
       stream: _dashboardSnapshotStream,
       builder: (context, dashboardSnapshot) {
-        final dashboard = dashboardSnapshot.data ?? DashboardSnapshot.empty();
+        if (dashboardSnapshot.hasError) {
+          return RealtimeErrorCard(message: 'Gagal memuat data realtime.');
+        }
+
+        if (!dashboardSnapshot.hasData) {
+          return const DashboardLoadingSkeleton();
+        }
+
+        final dashboard = dashboardSnapshot.data!;
         _handleClassificationChange(dashboard);
 
         return ListView(
@@ -58,7 +65,7 @@ class _DashboardPageState extends State<DashboardPage>
             TotalConsumptionCard(
               totalConsumption: dashboard.totalConsumption,
               onResetEnergy:
-                  dashboard.hasAssignedDevices
+                  dashboard.deviceIds.isNotEmpty || dashboard.hasAssignedDevices
                       ? () => _confirmAndResetEnergy(dashboard)
                       : null,
             ),
@@ -80,10 +87,13 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _confirmAndResetEnergy(DashboardSnapshot dashboard) async {
-    final deviceIds = dashboard.rooms
-        .map((room) => room.deviceId)
-        .whereType<String>()
-        .toList(growable: false);
+    final deviceIds =
+        dashboard.deviceIds.isNotEmpty
+            ? dashboard.deviceIds
+            : dashboard.rooms
+                .map((room) => room.deviceId)
+                .whereType<String>()
+                .toList(growable: false);
     if (deviceIds.isEmpty) {
       return;
     }
@@ -171,7 +181,6 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   void _showWaspadaPopup() {
-    NotificationService.instance.showWaspadaAlert();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -196,7 +205,6 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   void _showBorosPrompt(DashboardSnapshot dashboard) {
-    NotificationService.instance.showBorosAlert();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
