@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/device_profile.dart';
+import '../../../models/electrical_data.dart';
 import '../../../services/firebase_service.dart';
 import '../widgets/home_widgets.dart';
 
@@ -284,6 +285,14 @@ class _DeviceRelaySection extends StatelessWidget {
                   },
                 ),
               ),
+              const SizedBox(width: 12),
+              StreamBuilder<ElectricalData>(
+                stream: firebaseService.deviceMonitoringStream(deviceId),
+                builder: (context, snapshot) {
+                  final power = snapshot.data?.power ?? 0;
+                  return _PowerBadge(power: power);
+                },
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -356,6 +365,39 @@ class _RelayDevice {
 
   final int relayNumber;
   final String defaultName;
+}
+
+class _PowerBadge extends StatelessWidget {
+  const _PowerBadge({required this.power});
+
+  final double power;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDFA),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF99F6E4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.bolt_outlined, size: 16, color: Color(0xFF0F766E)),
+          const SizedBox(width: 4),
+          Text(
+            '${power.toStringAsFixed(1)} W',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F766E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RoomRelayCard extends StatelessWidget {
