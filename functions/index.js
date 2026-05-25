@@ -361,7 +361,6 @@ function monitoringFeatures(monitoring) {
     voltage: numberValue(monitoring.voltage),
     current: numberValue(monitoring.current),
     power: numberValue(monitoring.power),
-    duration: numberValue(monitoring.duration),
   };
 }
 
@@ -385,12 +384,7 @@ async function requestPrediction(roomId, features) {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         room: roomId,
-        features: [
-          features.voltage,
-          features.current,
-          features.power,
-          features.duration,
-        ],
+        features: [features.voltage, features.current],
       }),
       signal: controller.signal,
     });

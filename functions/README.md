@@ -10,6 +10,10 @@ Saat monitoring berubah, function memanggil endpoint KNN Render:
 
 `https://hetrack-knn.onrender.com/predict`
 
+Payload prediksi memakai 2 fitur sesuai model terbaru:
+
+`features: [voltage, current]`
+
 Lalu hasilnya ditulis ke canonical path:
 
 `device/{deviceId}/knn/classification`
