@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../services/device_offline_notification_service.dart';
@@ -45,8 +47,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         username: _usernameController.text,
         password: _passwordController.text,
       );
-      await DeviceOfflineNotificationService.instance.initialize();
-      await PushNotificationService.instance.initialize();
+      unawaited(_initializePostCreateAccountServices());
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const PinGateScreen()),
@@ -227,6 +228,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       message: message,
       icon: Icons.person_off_outlined,
     );
+  }
+
+  Future<void> _initializePostCreateAccountServices() async {
+    try {
+      await DeviceOfflineNotificationService.instance.initialize();
+      await PushNotificationService.instance.initialize();
+    } catch (error) {
+      debugPrint('Post-create account services failed: $error');
+    }
   }
 
   String _createAccountFailureMessage(String message) {

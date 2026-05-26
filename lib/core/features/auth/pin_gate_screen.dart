@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../home/home_screen.dart';
@@ -178,12 +180,20 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
   Future<void> _goToHomePage() async {
     if (!mounted) return;
-    await DeviceOfflineNotificationService.instance.initialize();
-    await PushNotificationService.instance.initialize();
+    unawaited(_initializePostLoginServices());
     if (!mounted) return;
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+  }
+
+  Future<void> _initializePostLoginServices() async {
+    try {
+      await DeviceOfflineNotificationService.instance.initialize();
+      await PushNotificationService.instance.initialize();
+    } catch (error) {
+      debugPrint('Post-login services failed: $error');
+    }
   }
 
   void _focusUsernameField() {

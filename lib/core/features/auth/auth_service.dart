@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -20,6 +22,8 @@ class AuthService {
 
   static const String _databaseUrl =
       'https://home-electrical-tracking-54460-default-rtdb.asia-southeast1.firebasedatabase.app';
+  static const Duration _authTimeout = Duration(seconds: 20);
+  static const Duration _databaseTimeout = Duration(seconds: 12);
 
   final FirebaseAuth _auth;
   final FirebaseDatabase _database;
@@ -49,9 +53,8 @@ class AuthService {
     }
 
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+      final credential = await _withAuthTimeout(
+        _auth.signInWithEmailAndPassword(email: email, password: password),
       );
       await _saveUserProfile(
         credential.user,
@@ -86,18 +89,24 @@ class AuthService {
       throw const AuthFailure('Password minimal 6 karakter.');
     }
 
-    final usernameSnapshot =
-        await _database.ref('usernames/$normalizedUsername/email').get();
+    final usernameSnapshot = await _withDatabaseTimeout(
+      _database.ref('usernames/$normalizedUsername/email').get(),
+    );
     if (usernameSnapshot.exists) {
       throw const AuthFailure('Username sudah dipakai.');
     }
 
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: normalizedEmail,
-        password: password,
+      final credential = await _withAuthTimeout(
+        _auth.createUserWithEmailAndPassword(
+          email: normalizedEmail,
+          password: password,
+        ),
       );
-      await credential.user?.updateDisplayName(normalizedUsername);
+      await _withAuthTimeout(
+        credential.user?.updateDisplayName(normalizedUsername) ??
+            Future<void>.value(),
+      );
       await _saveUserProfile(
         _auth.currentUser ?? credential.user,
         username: normalizedUsername,
@@ -128,7 +137,9 @@ class AuthService {
     }
 
     try {
-      await _auth.sendPasswordResetEmail(email: normalizedEmail);
+      await _withAuthTimeout(
+        _auth.sendPasswordResetEmail(email: normalizedEmail),
+      );
     } on FirebaseAuthException catch (error) {
       throw AuthFailure(_firebaseAuthMessage(error));
     }
@@ -149,7 +160,7 @@ class AuthService {
     }
 
     try {
-      return await _auth.verifyPasswordResetCode(trimmedCode);
+      return await _withAuthTimeout(_auth.verifyPasswordResetCode(trimmedCode));
     } on FirebaseAuthException catch (error) {
       throw AuthFailure(_firebaseAuthMessage(error));
     }
@@ -164,9 +175,11 @@ class AuthService {
     }
 
     try {
-      await _auth.confirmPasswordReset(
-        code: code.trim(),
-        newPassword: newPassword,
+      await _withAuthTimeout(
+        _auth.confirmPasswordReset(
+          code: code.trim(),
+          newPassword: newPassword,
+        ),
       );
     } on FirebaseAuthException catch (error) {
       throw AuthFailure(_firebaseAuthMessage(error));
@@ -177,19 +190,23 @@ class AuthService {
     try {
       final UserCredential credential;
       if (kIsWeb) {
-        credential = await _auth.signInWithPopup(GoogleAuthProvider());
+        credential = await _withAuthTimeout(
+          _auth.signInWithPopup(GoogleAuthProvider()),
+        );
       } else {
-        final googleUser = await _googleSignIn.signIn();
+        final googleUser = await _withAuthTimeout(_googleSignIn.signIn());
         if (googleUser == null) {
           throw const AuthFailure('Login Google dibatalkan.');
         }
 
-        final googleAuth = await googleUser.authentication;
+        final googleAuth = await _withAuthTimeout(googleUser.authentication);
         final oauthCredential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
-        credential = await _auth.signInWithCredential(oauthCredential);
+        credential = await _withAuthTimeout(
+          _auth.signInWithCredential(oauthCredential),
+        );
       }
 
       await _saveUserProfile(credential.user, provider: 'google');
@@ -202,9 +219,9 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await _auth.signOut();
+    await _withAuthTimeout(_auth.signOut());
     if (!kIsWeb) {
-      await _googleSignIn.signOut();
+      await _withAuthTimeout(_googleSignIn.signOut());
     }
   }
 
@@ -222,7 +239,7 @@ class AuthService {
     ];
 
     for (final path in directPaths) {
-      final snapshot = await _database.ref(path).get();
+      final snapshot = await _withDatabaseTimeout(_database.ref(path).get());
       final value = snapshot.value?.toString().trim();
       if (value != null && value.isNotEmpty) {
         return value;
@@ -231,12 +248,9 @@ class AuthService {
 
     final collectionPaths = <String>['app_users', 'users', 'accounts'];
     for (final path in collectionPaths) {
-      final snapshot =
-          await _database
-              .ref(path)
-              .orderByChild('username')
-              .equalTo(username)
-              .get();
+      final snapshot = await _withDatabaseTimeout(
+        _database.ref(path).orderByChild('username').equalTo(username).get(),
+      );
       final email = _firstEmailFromCollection(snapshot.value);
       if (email != null) {
         return email;
@@ -296,7 +310,29 @@ class AuthService {
       }
     }
 
-    await _database.ref().update(updates);
+    await _withDatabaseTimeout(_database.ref().update(updates));
+  }
+
+  Future<T> _withAuthTimeout<T>(Future<T> future) {
+    return future.timeout(
+      _authTimeout,
+      onTimeout: () {
+        throw const AuthFailure(
+          'Login terlalu lama merespons. Periksa koneksi internet lalu coba lagi.',
+        );
+      },
+    );
+  }
+
+  Future<T> _withDatabaseTimeout<T>(Future<T> future) {
+    return future.timeout(
+      _databaseTimeout,
+      onTimeout: () {
+        throw const AuthFailure(
+          'Database terlalu lama merespons. Periksa koneksi internet lalu coba lagi.',
+        );
+      },
+    );
   }
 
   String _firebaseAuthMessage(FirebaseAuthException error) {
