@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../home/home_screen.dart';
-import '../../services/device_offline_notification_service.dart';
 import '../../services/push_notification_service.dart';
 import 'auth_service.dart';
 import 'biometric_auth_service.dart';
@@ -189,7 +188,6 @@ class _PinGateScreenState extends State<PinGateScreen> {
 
   Future<void> _initializePostLoginServices() async {
     try {
-      await DeviceOfflineNotificationService.instance.initialize();
       await PushNotificationService.instance.initialize();
     } catch (error) {
       debugPrint('Post-login services failed: $error');

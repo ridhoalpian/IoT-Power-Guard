@@ -39,22 +39,38 @@ listener realtime agar tidak dobel dengan FCM. Snackbar di dashboard tetap
 ditampilkan sebagai feedback saat user sedang membuka halaman Home. App tidak
 lagi memanggil endpoint Render atau menulis hasil klasifikasi ke RTDB.
 
-Offline notification sekarang berjalan langsung dari aplikasi mobile lewat
-listener RTDB + local notification. Cloud Functions di folder ini tidak lagi
-dibutuhkan untuk fitur offline notification standar.
+## Offline alert via FCM
 
-## Yang dikerjakan app
+Function `notifyOfflineDevices` berjalan terjadwal setiap 1 menit. Function ini
+membaca:
 
-App memonitor `device/*/last_seen` secara realtime, menandai device offline
-setelah 20 detik tidak ada heartbeat, lalu menampilkan local notification saat
-ada device yang baru masuk status offline.
+`device/{deviceId}`
 
-Jika Anda masih ingin memakai FCM untuk use case lain, app tetap bisa menyimpan
-token ke:
+lalu menghitung status offline dari `connection/status` dan fallback
+`last_seen`. Saat perangkat baru masuk offline, function mengambil token dari:
 
 `iot_power_guard/notification_tokens/{encodedToken}`
 
-Tetapi token itu tidak lagi dipakai untuk offline notification default.
+lalu mengirim Firebase Cloud Messaging ke semua token terdaftar.
+
+State dedupe disimpan di:
+
+`iot_power_guard/offline_alerts/{deviceId}`
+
+Channel Android yang dipakai:
+
+- `device_offline_channel` untuk perangkat offline
+
+## Yang dikerjakan app
+
+App menyimpan token FCM ke:
+
+`iot_power_guard/notification_tokens/{encodedToken}`
+
+Saat app sedang foreground, payload FCM `type=device_offline` tetap ditampilkan
+ulang lewat local notification supaya channel dan tampilan Android konsisten.
+Listener local offline lama tidak lagi diinisialisasi setelah login agar tidak
+ada notifikasi ganda.
 
 ## Yang harus ditulis device atau backend
 
@@ -76,17 +92,18 @@ server/`monitoring.timestamp`.
 
 ## Status folder ini
 
-- `functions/index.js` adalah implementasi backend opsional lama.
-- Deploy Cloud Function tidak diperlukan agar offline notification di app
-  bekerja.
-- Jika project Firebase masih plan Spark, fitur offline notification tetap
-  berjalan karena sekarang tidak memakai Cloud Scheduler.
+- `functions/index.js` adalah backend untuk klasifikasi KNN, notifikasi
+  klasifikasi, dan notifikasi offline via FCM.
+- Deploy Cloud Function diperlukan agar offline notification via FCM bekerja
+  saat app background atau terminated.
+- `notifyOfflineDevices` memakai Cloud Scheduler. Jika project Firebase masih
+  plan Spark dan Scheduler tidak tersedia, gunakan alternatif worker backend di
+  bawah.
 
 ## Alternatif backend non-Scheduler
 
-Jika Anda nanti butuh offline notification yang tetap akurat saat app
-background/terminated, opsi yang paling masuk akal adalah worker backend
-eksternal yang selalu hidup, bukan Cloud Scheduler.
+Jika Anda butuh offline notification tanpa Cloud Scheduler, opsi yang paling
+masuk akal adalah worker backend eksternal yang selalu hidup.
 
 Rancangan yang disarankan:
 
@@ -116,7 +133,8 @@ Konsekuensi:
 1. Install Firebase CLI
 2. Login: `firebase login`
 3. Dari root repo, jalankan deploy: `firebase deploy --only functions`
-4. Jika ingin deploy function ini saja: `firebase deploy --only functions:notifyOfflineDevices`
+4. Jika ingin deploy function offline saja:
+   `firebase deploy --only functions:notifyOfflineDevices`
 
 ## Struktur repo
 
@@ -128,10 +146,8 @@ Konsekuensi:
 
 ## Catatan
 
-- Tanpa backend, offline notification hanya andal saat proses app masih hidup.
-  Untuk menghindari false positive, listener offline sekarang hanya aktif saat
-  app foreground/resumed.
-- Jika app ditutup penuh/terminated oleh sistem, tidak ada server yang bisa
-  mengirim push offline.
-- Jika Anda tetap memakai FCM untuk use case lain, payload foreground masih bisa
-  ditampilkan lagi lewat local notification.
+- Tanpa deploy function atau worker backend, tidak ada server yang bisa
+  mengirim push offline saat app ditutup penuh/terminated.
+- Karena `notifyOfflineDevices` berjalan setiap 1 menit, notifikasi offline bisa
+  terlambat sampai sekitar 1 menit walaupun threshold offline app adalah 20
+  detik.

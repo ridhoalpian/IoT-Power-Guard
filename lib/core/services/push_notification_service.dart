@@ -54,6 +54,15 @@ class PushNotificationService {
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    final type = message.data['type']?.toString();
+    if (type == 'device_offline') {
+      final deviceName = message.data['deviceName']?.toString().trim();
+      if (deviceName != null && deviceName.isNotEmpty) {
+        await NotificationService.instance.showDeviceOfflineAlert([deviceName]);
+        return;
+      }
+    }
+
     final notification = message.notification;
     final title = notification?.title ?? message.data['title']?.toString();
     final body = notification?.body ?? message.data['body']?.toString();

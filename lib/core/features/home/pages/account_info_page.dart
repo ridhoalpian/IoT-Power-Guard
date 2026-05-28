@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../../services/device_offline_notification_service.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/pin_gate_screen.dart';
 import '../widgets/home_widgets.dart';
@@ -27,7 +26,6 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
     });
 
     try {
-      await DeviceOfflineNotificationService.instance.dispose();
       await _authService.signOut();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(

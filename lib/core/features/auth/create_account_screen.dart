@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../services/device_offline_notification_service.dart';
 import '../../services/push_notification_service.dart';
 import 'auth_service.dart';
 import 'pin_gate_screen.dart';
@@ -232,7 +231,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   Future<void> _initializePostCreateAccountServices() async {
     try {
-      await DeviceOfflineNotificationService.instance.initialize();
       await PushNotificationService.instance.initialize();
     } catch (error) {
       debugPrint('Post-create account services failed: $error');
