@@ -18,6 +18,11 @@ class RoomMonitoringPage extends StatefulWidget {
 class _RoomMonitoringPageState extends State<RoomMonitoringPage>
     with AutomaticKeepAliveClientMixin<RoomMonitoringPage> {
   static const String _defaultIconKey = 'device';
+  static const List<_RoomOption> _roomOptions = [
+    _RoomOption('Kamar', 'bed'),
+    _RoomOption('Ruang Tengah', 'weekend'),
+    _RoomOption('Dapur', 'kitchen'),
+  ];
   static const List<_IconOption> _iconOptions = [
     _IconOption('device', Icons.memory_outlined, 'Device'),
     _IconOption('kitchen', Icons.kitchen_outlined, 'Dapur'),
@@ -95,7 +100,7 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
                   _DeviceMonitoringCard(
                     deviceId: deviceIds[index],
                     firebaseService: widget.firebaseService,
-                    iconOptions: _iconOptions,
+                    roomOptions: _roomOptions,
                     defaultIconKey: _defaultIconKey,
                     iconFromKey: _iconFromKey,
                   ),
@@ -113,6 +118,13 @@ class _RoomMonitoringPageState extends State<RoomMonitoringPage>
   bool get wantKeepAlive => true;
 }
 
+class _RoomOption {
+  const _RoomOption(this.name, this.iconKey);
+
+  final String name;
+  final String iconKey;
+}
+
 class _IconOption {
   const _IconOption(this.key, this.icon, this.label);
 
@@ -125,171 +137,132 @@ class _DeviceMonitoringCard extends StatelessWidget {
   const _DeviceMonitoringCard({
     required this.deviceId,
     required this.firebaseService,
-    required this.iconOptions,
+    required this.roomOptions,
     required this.defaultIconKey,
     required this.iconFromKey,
   });
 
   final String deviceId;
   final FirebaseService firebaseService;
-  final List<_IconOption> iconOptions;
+  final List<_RoomOption> roomOptions;
   final String defaultIconKey;
   final IconData Function(String? key) iconFromKey;
 
-  void _showEditSheet(BuildContext context, DeviceProfile profile) {
-    final controller = TextEditingController(text: profile.name);
-    String selectedIconKey =
-        iconOptions.any((option) => option.key == profile.iconKey)
-            ? profile.iconKey
-            : defaultIconKey;
+  void _showEditDialog(BuildContext context, DeviceProfile profile) {
+    String selectedRoomName =
+        roomOptions.any((option) => option.name == profile.name)
+            ? profile.name
+            : roomOptions.first.name;
 
-    showModalBottomSheet<void>(
+    showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Expanded(
-                        child: Text(
-                          'Edit Nama & Icon',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      labelText: 'Nama Device',
-                      filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Pilih Icon',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final option in iconOptions)
-                        SizedBox(
-                          width: 72,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              setState(() {
-                                selectedIconKey = option.key;
-                              });
-                            },
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  height: 48,
-                                  width: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        option.key == selectedIconKey
-                                            ? const Color(
-                                              0xFF0A7A6F,
-                                            ).withValues(alpha: 0.12)
-                                            : const Color(0xFFF9FAFB),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color:
-                                          option.key == selectedIconKey
-                                              ? const Color(0xFF0A7A6F)
-                                              : const Color(0xFFE5E7EB),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    option.icon,
-                                    color:
-                                        option.key == selectedIconKey
-                                            ? const Color(0xFF0A7A6F)
-                                            : const Color(0xFF6B7280),
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  option.label,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF6B7280),
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Pilih Ruangan',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final trimmed = controller.text.trim();
-                        final name =
-                            trimmed.isEmpty ? 'Device $deviceId' : trimmed;
-                        firebaseService.setDeviceProfile(
-                          deviceId,
-                          name: name,
-                          iconKey: selectedIconKey,
-                        );
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0A7A6F),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedRoomName,
+                        items: roomOptions
+                            .map(
+                              (option) => DropdownMenuItem<String>(
+                                value: option.name,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      iconFromKey(option.iconKey),
+                                      size: 20,
+                                      color: const Color(0xFF0A7A6F),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(option.name),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          final room = roomOptions.firstWhere(
+                            (option) => option.name == value,
+                          );
+                          setState(() {
+                            selectedRoomName = room.name;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Ruangan',
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
-                      child: const Text('Simpan'),
-                    ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final selectedRoom = roomOptions.firstWhere(
+                              (option) => option.name == selectedRoomName,
+                            );
+                            firebaseService.setDeviceProfile(
+                              deviceId,
+                              name: selectedRoomName,
+                              iconKey: selectedRoom.iconKey,
+                            );
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0A7A6F),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Simpan'),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -356,7 +329,7 @@ class _DeviceMonitoringCard extends StatelessWidget {
                     tooltip: 'Edit',
                     icon: const Icon(Icons.edit_outlined),
                     color: const Color(0xFF6B7280),
-                    onPressed: () => _showEditSheet(context, profile),
+                    onPressed: () => _showEditDialog(context, profile),
                   ),
                 ],
               );
