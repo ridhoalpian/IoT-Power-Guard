@@ -14,6 +14,14 @@ Payload prediksi memakai 2 fitur sesuai model terbaru:
 
 `features: [voltage, current]`
 
+Sebelum memanggil endpoint KNN, function menerapkan override tanpa beban:
+
+- `current <= 0.03 A`
+- `power <= 1 W`
+
+Jika kondisi itu terpenuhi, klasifikasi dipaksa `Normal` dan notifikasi
+klasifikasi tidak dikirim walaupun voltage berbeda dari data latih.
+
 Lalu hasilnya ditulis ke canonical path:
 
 `device/{deviceId}/knn/classification`

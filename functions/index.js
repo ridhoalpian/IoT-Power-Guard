@@ -22,6 +22,8 @@ const UINT32_MOD = 4294967296;
 const MAX_REASONABLE_LAST_SEEN_DRIFT_MS = 31536000000;
 const LOW_CONSUMPTION_THRESHOLD_WATTS = 150;
 const MEDIUM_CONSUMPTION_THRESHOLD_WATTS = 400;
+const NO_LOAD_CURRENT_THRESHOLD_AMPS = 0.03;
+const NO_LOAD_POWER_THRESHOLD_WATTS = 1;
 const DASHBOARD_ROOM_CONFIGS = [
   {
     roomId: "dapur",
@@ -64,20 +66,28 @@ exports.classifyDeviceMonitoring = onValueWritten(
     const roomId = resolveRoomId(deviceId, device);
     const features = monitoringFeatures(monitoring);
 
-    let prediction;
-    try {
-      prediction = await requestPrediction(roomId, features);
-    } catch (error) {
-      logger.error("Gagal meminta prediksi KNN dari Render.", {
-        deviceId,
-        roomId,
-        error: error.message,
-      });
+    let prediction = null;
+    if (isNoLoad(features)) {
       prediction = {
-        classification: classifyByPower(features.power),
+        classification: "Normal",
         probabilities: {},
-        source: "power_threshold_fallback",
+        source: "no_load_override",
       };
+    } else {
+      try {
+        prediction = await requestPrediction(roomId, features);
+      } catch (error) {
+        logger.error("Gagal meminta prediksi KNN dari Render.", {
+          deviceId,
+          roomId,
+          error: error.message,
+        });
+        prediction = {
+          classification: classifyByPower(features.power),
+          probabilities: {},
+          source: "power_threshold_fallback",
+        };
+      }
     }
 
     const currentClassification = canonicalClassification(
@@ -136,6 +146,26 @@ exports.notifyClassificationChange = onValueWritten(
       alertRef.get(),
       admin.database().ref(`${DEVICE_ROOT}/${deviceId}`).get(),
     ]);
+    const device = asMap(deviceSnapshot.val());
+    const monitoring = monitoringFeatures(asMap(device.monitoring));
+    if (isNoLoad(monitoring)) {
+      await Promise.all([
+        alertRef.remove(),
+        admin.database().ref(`${DEVICE_ROOT}/${deviceId}/knn`).update({
+          classification: "Normal",
+          probabilities: {},
+          source: "no_load_notification_guard",
+          updated_at: admin.database.ServerValue.TIMESTAMP,
+        }),
+      ]);
+      logger.info("Classification notification suppressed for no-load state", {
+        deviceId,
+        classification: after,
+        power: monitoring.power,
+        current: monitoring.current,
+      });
+      return;
+    }
 
     const previousAlert = asMap(alertSnapshot.val());
     if (previousAlert.notified_for === after) {
@@ -151,7 +181,7 @@ exports.notifyClassificationChange = onValueWritten(
       return;
     }
 
-    const deviceName = resolveDeviceName(deviceId, asMap(deviceSnapshot.val()));
+    const deviceName = resolveDeviceName(deviceId, device);
     const alert = classificationAlert(after, deviceName);
     const response = await admin.messaging().sendEachForMulticast({
       tokens,
@@ -354,6 +384,11 @@ function classifyByPower(power) {
     return "Waspada";
   }
   return "Normal";
+}
+
+function isNoLoad(features) {
+  return Math.abs(features.current) <= NO_LOAD_CURRENT_THRESHOLD_AMPS &&
+    Math.abs(features.power) <= NO_LOAD_POWER_THRESHOLD_WATTS;
 }
 
 function monitoringFeatures(monitoring) {

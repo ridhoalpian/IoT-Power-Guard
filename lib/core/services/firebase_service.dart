@@ -27,6 +27,8 @@ class FirebaseService {
   static const int _epochSecondsThreshold = 1000000000;
   static const int _uint32Mod = 4294967296;
   static const int _maxReasonableLastSeenDriftMs = 31536000000;
+  static const double _noLoadCurrentThresholdAmps = 0.03;
+  static const double _noLoadPowerThresholdWatts = 1;
   static const double _lowConsumptionThresholdWatts = 150;
   static const double _mediumConsumptionThresholdWatts = 400;
   static const List<_DashboardRoomConfig> _dashboardRoomConfigs = [
@@ -91,9 +93,7 @@ class FirebaseService {
     return _deviceRoot.child(deviceId).onValue.map((event) {
       final deviceMap = _asMap(event.snapshot.value);
       final monitoringMap = _asMap(deviceMap['monitoring']);
-      final monitoring = ElectricalData.fromMap(monitoringMap);
-      return _resolveConsumptionLevel(deviceMap, monitoringMap) ??
-          _classifyByPower(monitoring.power);
+      return _resolveEffectiveConsumptionLevel(deviceMap, monitoringMap);
     }).distinct();
   }
 
@@ -612,9 +612,10 @@ class FirebaseService {
           deviceId: deviceId,
           name: deviceName,
           monitoring: monitoring,
-          classification:
-              _resolveConsumptionLevel(deviceMap, monitoringMap) ??
-              _classifyByPower(monitoring.power),
+          classification: _resolveEffectiveConsumptionLevel(
+            deviceMap,
+            monitoringMap,
+          ),
           isOnline: isOnline,
           lastSeen: lastSeen,
         ),
@@ -708,6 +709,23 @@ class FirebaseService {
       return ConsumptionLevel.medium;
     }
     return ConsumptionLevel.low;
+  }
+
+  ConsumptionLevel _resolveEffectiveConsumptionLevel(
+    Map<String, dynamic> deviceMap,
+    Map<String, dynamic> monitoringMap,
+  ) {
+    final monitoring = ElectricalData.fromMap(monitoringMap);
+    if (_isNoLoad(monitoring)) {
+      return ConsumptionLevel.low;
+    }
+    return _resolveConsumptionLevel(deviceMap, monitoringMap) ??
+        _classifyByPower(monitoring.power);
+  }
+
+  bool _isNoLoad(ElectricalData monitoring) {
+    return monitoring.current.abs() <= _noLoadCurrentThresholdAmps &&
+        monitoring.power.abs() <= _noLoadPowerThresholdWatts;
   }
 
   ConsumptionLevel? _resolveConsumptionLevel(
