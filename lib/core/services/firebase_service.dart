@@ -27,7 +27,7 @@ class FirebaseService {
   static const int _epochSecondsThreshold = 1000000000;
   static const int _uint32Mod = 4294967296;
   static const int _maxReasonableLastSeenDriftMs = 31536000000;
-  static const double _noLoadCurrentThresholdAmps = 0.03;
+  static const double _noLoadCurrentThresholdAmps = 0.04;
   static const double _noLoadPowerThresholdWatts = 1;
   static const double _lowConsumptionThresholdWatts = 150;
   static const double _mediumConsumptionThresholdWatts = 400;
